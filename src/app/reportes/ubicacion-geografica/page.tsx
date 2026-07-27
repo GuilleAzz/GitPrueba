@@ -17,14 +17,9 @@ import { KPIsUbicacion } from "./components/KPIsUbicacion"
 import { AcordeonZonas } from "./components/AcordeonZonas"
 import { ToggleVista } from "./components/ToggleVista"
 import { FiltrosGeografia } from "./components/FiltrosGeografia"
-import { AlertaUrgentes } from "./components/Alertasurgentes"
 import { VistaGeneralGeo, type ZonaGeneral } from "./components/VistaGeneralGeo"
 
-import {
-  distanciaDesdeCordoba,
-  clasificarDistancia,
-  PROVINCIAS_ARGENTINA
-} from "src/lib/data/argentina-ubicaciones"
+import { PROVINCIAS_ARGENTINA } from "src/lib/data/argentina-ubicaciones"
 import { redirect, notFound } from "next/navigation"
 
 // ============================================================================
@@ -58,24 +53,14 @@ export type ZonaGeografica = {
   ciudad: string
   provincia: string
   coordenadas: { lat: number; lng: number } | null
-  distanciaKm: number
-  clasificacionDistancia: {
-    tipo: 'local' | 'cercano' | 'medio' | 'lejano'
-    label: string
-    color: string
-  }
   juzgados: JuzgadoAgrupado[]
   totalCasos: number
-  casosUrgentes: number
   casos: CasoUbicacion[]
 }
 
 export type KPIsData = {
   totalCasos: number
   ciudadesActivas: number
-  casosUrgentes: number
-  requierenViaje: number
-  distanciaPromedio: number
 }
 
 // ============================================================================
@@ -184,16 +169,6 @@ function humanizarProvincia(provinciaId: string): string {
   return mapa[provinciaId] ?? provinciaId
 }
 
-function getPesoLogistico(zona: ZonaGeografica): number {
-  let peso = 0
-  if (zona.clasificacionDistancia.tipo === 'lejano') peso += 100
-  else if (zona.clasificacionDistancia.tipo === 'medio') peso += 60
-  else if (zona.clasificacionDistancia.tipo === 'cercano') peso += 30
-  peso += zona.casosUrgentes * 50
-  peso += zona.totalCasos * 5
-  return peso
-}
-
 const isAdmin = (rol: string) => rol?.toUpperCase() === 'ADMIN'
 const isAbogado = (rol: string) => rol?.toUpperCase() === 'ABOGADO'
 const isAsistente = (rol: string) => rol?.toUpperCase() === 'ASISTENTE'
@@ -211,10 +186,6 @@ async function obtenerCasosPorUbicacion(
 ): Promise<{
   zonas: ZonaGeografica[]
   kpis: KPIsData
-  casosUrgentesDetalle: {
-    id: string; titulo: string; numero: string; tipo: string
-    ciudad: string; distanciaKm: number; clasificacion: string
-  }[]
 }> {
   const whereClause: any = {
     estaCerrado: false,
@@ -268,27 +239,9 @@ async function obtenerCasosPorUbicacion(
   })
 
   const zonas: ZonaGeografica[] = []
-  let totalDistancia = 0
-  let zonasConDistancia = 0
-  const casosUrgentesDetalle: { id: string; titulo: string; numero: string; tipo: string; ciudad: string; distanciaKm: number; clasificacion: string }[] = []
-
   zonasPorCiudad.forEach((data, key) => {
     const [ciudad, provincia] = key.split('|')
     const coordenadas = buscarCoordenadasCiudad(ciudad, provincia)
-    let distanciaKm = 0
-    if (coordenadas) {
-      distanciaKm = distanciaDesdeCordoba(coordenadas.lat, coordenadas.lng)
-      totalDistancia += distanciaKm
-      zonasConDistancia++
-    }
-    const clasificacion = clasificarDistancia(distanciaKm)
-
-    data.casos.filter(c => c.esUrgente).forEach(c => {
-      casosUrgentesDetalle.push({
-        id: c.id, titulo: c.titulo, numero: c.numero, tipo: c.tipo,
-        ciudad, distanciaKm, clasificacion: clasificacion.label
-      })
-    })
 
     const juzgadosMap = new Map<string, CasoUbicacion[]>()
     data.casos.forEach(caso => {
@@ -303,31 +256,22 @@ async function obtenerCasosPorUbicacion(
       }))
       .sort((a, b) => b.cantidadCasos - a.cantidadCasos)
 
-    zonas.push({
-      id: key, ciudad, provincia, coordenadas, distanciaKm,
-      clasificacionDistancia: clasificacion, juzgados,
-      totalCasos: data.casos.length,
-      casosUrgentes: data.casos.filter(c => c.esUrgente).length,
-      casos: data.casos
-    })
+      zonas.push({
+        id: key, ciudad, provincia, coordenadas, juzgados,
+        totalCasos: data.casos.length,
+        casos: data.casos,
+      })
+
   })
 
-  zonas.sort((a, b) => {
-    const pesoA = getPesoLogistico(a), pesoB = getPesoLogistico(b)
-    if (pesoA !== pesoB) return pesoB - pesoA
-    return b.totalCasos - a.totalCasos
-  })
-  casosUrgentesDetalle.sort((a, b) => b.distanciaKm - a.distanciaKm)
+zonas.sort((a, b) => b.totalCasos - a.totalCasos)
 
   const kpis: KPIsData = {
-    totalCasos: casos.length,
-    ciudadesActivas: zonas.length,
-    casosUrgentes: casosUrgentesDetalle.length,
-    requierenViaje: zonas.filter(z => z.clasificacionDistancia.tipo !== 'local').length,
-    distanciaPromedio: zonasConDistancia > 0 ? Math.round(totalDistancia / zonasConDistancia) : 0
-  }
+      totalCasos: casos.length,
+      ciudadesActivas: zonas.length,
+    }
 
-  return { zonas, kpis, casosUrgentesDetalle }
+    return { zonas, kpis }
 }
 
 // ============================================================================
@@ -390,39 +334,24 @@ async function obtenerVistaGeneral(): Promise<ZonaGeneral[]> {
 
   const zonas: ZonaGeneral[] = []
 
-  ciudadMap.forEach((data, key) => {
+ciudadMap.forEach((data, key) => {
     const [ciudad, provincia] = key.split('|')
-    const coordenadas = buscarCoordenadasCiudad(ciudad, provincia)
-    let distanciaKm = 0
-    if (coordenadas) {
-      distanciaKm = distanciaDesdeCordoba(coordenadas.lat, coordenadas.lng)
-    }
-    const clasificacion = clasificarDistancia(distanciaKm)
 
     zonas.push({
       ciudad,
       provincia,
-      distanciaKm,
-      clasificacionDistancia: clasificacion,
       totalCasos: data.totalCasos,
-      tieneAltaPrioridad: data.tieneAltaPrioridad,
-      requiereViaje: clasificacion.tipo !== 'local',
       abogados: Array.from(data.abogados.entries()).map(([id, ab]) => ({
         id,
         nombre: ab.nombre,
         cantidadCasos: ab.casos,
-        tieneAltaPrioridad: ab.tieneAltaPrioridad
       })).sort((a, b) => b.cantidadCasos - a.cantidadCasos)
     })
   })
 
   // Ordenar: primero coordinables con viaje, luego por carga
-  return zonas.sort((a, b) => {
-    const coordA = a.abogados.length > 1 && a.requiereViaje ? 1 : 0
-    const coordB = b.abogados.length > 1 && b.requiereViaje ? 1 : 0
-    if (coordA !== coordB) return coordB - coordA
-    return b.totalCasos - a.totalCasos
-  })
+ // Ordenar por carga de casos
+  return zonas.sort((a, b) => b.totalCasos - a.totalCasos)
 }
 
 // ============================================================================
@@ -524,11 +453,6 @@ export default async function UbicacionGeograficaPage({
                   />
                 </div>
 
-                <AlertaUrgentes
-                  casosUrgentes={datosPersonal.casosUrgentesDetalle}
-                  totalCasos={datosPersonal.kpis.totalCasos}
-                />
-
                 {(isAdmin(userRol) || isAbogado(userRol)) && (
                   <KPIsUbicacion data={datosPersonal.kpis} />
                 )}
@@ -559,9 +483,8 @@ export default async function UbicacionGeograficaPage({
             {!vistaGeneral && (
               <div className="mt-8 p-4 bg-slate-100 border border-slate-200 rounded-lg">
                 <p className="text-xs text-slate-600">
-                  <strong>Nota:</strong> Las distancias se calculan desde Tribunales de Córdoba Capital.
-                  Clasificación: Local (0-10km), Cercano (10-100km), Media distancia (100-400km), Larga distancia (+400km).
-                  Las zonas se ordenan por prioridad logística: primero las más lejanas con expedientes urgentes.
+                  <strong>Nota:</strong> Los expedientes se agrupan por ciudad y provincia según el fuero cargado.
+                  Este reporte muestra la distribución territorial de la cartera para organizar recorridas y traslados.
                 </p>
               </div>
             )}

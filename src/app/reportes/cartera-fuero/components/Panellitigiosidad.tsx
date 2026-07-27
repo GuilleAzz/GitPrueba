@@ -25,10 +25,10 @@ export function PanelLitigiosidad({ data }: { data: LitigiosidadData }) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
           <TrendingDown className="w-5 h-5 text-indigo-600" />
-          Tasa de Litigiosidad 
+          Distribución por fase procesal
         </CardTitle>
         <p className="text-xs text-slate-500">
-          ¿En qué etapa están los expedientes? Si todo está en ejecución, se viene un &quot;vacío&quot; de trabajo.
+          Expedientes activos agrupados según la fase procesal en que se encuentran.
         </p>
       </CardHeader>
       <CardContent>
@@ -36,7 +36,7 @@ export function PanelLitigiosidad({ data }: { data: LitigiosidadData }) {
           {/* Temprana */}
           <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-blue-600 uppercase">Etapa Temprana</p>
+            <p className="text-xs font-semibold text-blue-600 uppercase">Conocimiento</p>
               <span className="text-lg font-bold text-blue-700">{pctTemprana}%</span>
             </div>
             <p className="text-xs text-blue-500 mb-2">Inicio / Mediación / Previo</p>
@@ -49,7 +49,7 @@ export function PanelLitigiosidad({ data }: { data: LitigiosidadData }) {
           {/* Media */}
           <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-amber-600 uppercase">Etapa Media</p>
+              <p className="text-xs font-semibold text-amber-600 uppercase">Prueba</p>
               <span className="text-lg font-bold text-amber-700">{pctMedia}%</span>
             </div>
             <p className="text-xs text-amber-500 mb-2">Prueba / Alegatos</p>
@@ -62,7 +62,7 @@ export function PanelLitigiosidad({ data }: { data: LitigiosidadData }) {
           {/* Tardía */}
           <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-emerald-600 uppercase">Etapa Tardía</p>
+              <p className="text-xs font-semibold text-emerald-600 uppercase">Resolución / Ejecución</p>
               <span className="text-lg font-bold text-emerald-700">{pctTardia}%</span>
             </div>
             <p className="text-xs text-emerald-500 mb-2">Sentencia / Apelación / Ejecución</p>

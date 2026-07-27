@@ -55,7 +55,6 @@ function rangoFechasPeriodo(periodo: Periodo): { desde: Date | null } {
   }
 }
 
-const PORCENTAJE_HONORARIOS = 0.20 // 20% — proyección estándar del estudio
 
 export default async function ReporteCuantiaLiquidacionesPage({
   searchParams,
@@ -124,7 +123,6 @@ export default async function ReporteCuantiaLiquidacionesPage({
 
   // ── Agregaciones ──────────────────────────────────────────────────────────
   const capitalTotal = liquidaciones.reduce((acc, l) => acc + Number(l.montoTotal), 0)
-  const honorariosProyectados = capitalTotal * PORCENTAJE_HONORARIOS
   const cantidadCalculos = liquidaciones.length
 
   const distribucion = [
@@ -224,9 +222,7 @@ export default async function ReporteCuantiaLiquidacionesPage({
               <>
                 <KPIsCuantia
                   capitalTotal={capitalTotal}
-                  honorariosProyectados={honorariosProyectados}
                   cantidadCalculos={cantidadCalculos}
-                  porcentajeHonorarios={PORCENTAJE_HONORARIOS}
                 />
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -265,8 +261,10 @@ export default async function ReporteCuantiaLiquidacionesPage({
                     <div className="space-y-1">
                       <p>
                         <span className="font-semibold">Notas metodológicas.</span>{" "}
-                        Los montos son estimaciones sobre los cálculos realizados, no representan condena firme ni cobro asegurado.
-                        El porcentaje de honorarios proyectado (20%) es una estimación estándar, no un contrato firme con cada cliente.
+                        Los montos son estimaciones sobre los cálculos guardados, no representan condena firme ni cobro asegurado.
+                        El sistema no proyecta honorarios: su regulación depende de la etapa procesal alcanzada y de la base que
+                        fije el tribunal, y es una decisión profesional ajena al alcance de esta herramienta.
+                        El período filtra por fecha de guardado del cálculo.
                       </p>
                       <p>
                         Cálculos sueltos (no vinculados a expedientes) no se incluyen. Los cálculos eliminados (soft delete) se excluyen automáticamente.

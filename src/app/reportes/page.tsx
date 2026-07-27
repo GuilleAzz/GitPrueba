@@ -1,4 +1,9 @@
 // app/reportes/page.tsx
+//
+// CAMBIO: se saca la agrupación por bloques (Personal / Operativo / Expedientes /
+// Estratégico) y queda una grilla plana con todos los reportes disponibles.
+// El diseño de cada card se mantiene idéntico. Sigue filtrando por rol
+// (asistentes no ven reportes marcados como soloAbogado).
 
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
@@ -29,136 +34,111 @@ type Reporte = {
   href: string
   icono: any
   color: keyof typeof COLOR_MAP
-  soloAbogado: boolean 
+  soloAbogado: boolean
 }
 
-type Bloque = {
-  titulo: string
-  descripcion: string
-  reportes: Reporte[]
-}
-
-const BLOQUES: Bloque[] = [
+// ─────────────────────────────────────────────────────────────────────────────
+// Grilla plana de reportes (sin agrupación por categorías).
+// El orden acá es el orden en que se van a mostrar en pantalla.
+// Mantiene el criterio anterior de forma implícita: primero los reportes
+// operativos que ven todos, después los estratégicos que ven solo abogados.
+// ─────────────────────────────────────────────────────────────────────────────
+const REPORTES: Reporte[] = [
   {
-    titulo: "Personal",
-    descripcion: "Tu actividad y tus expedientes",
-    reportes: [
-      {
-        titulo: "Auditoría personal",
-        descripcion: "Registro de cambios en mis expedientes",
-        href: "/reportes/auditoria",
-        icono: FileText,
-        color: "slate",
-        soloAbogado: true 
-      },
-    ],
+    titulo: "Auditoría personal",
+    descripcion: "Registro de cambios en mis expedientes",
+    href: "/reportes/auditoria",
+    icono: FileText,
+    color: "slate",
+    soloAbogado: true,
   },
   {
-    titulo: "Operativo",
-    descripcion: "Agenda, carga y ritmo de trabajo",
-    reportes: [
-      {
-        titulo: "Cumplimiento de Plazos",
-        descripcion: "Cómo se trabajó: eventos cumplidos en plazo, con demora y vencidas",
-        href: "/reportes/cumplimiento-tareas",
-        icono: ClipboardCheck,
-        color: "blue",
-        soloAbogado: false
-      },
-      {
-        titulo: "Carga de trabajo",
-        descripcion: "Qué tenés encima hoy: expedientes, agenda, eventos activos y próximos a vencer",
-        href: "/reportes/matriz-carga",
-        icono: Briefcase,
-        color: "cyan",
-        soloAbogado: false
-      },
-      {
-        titulo: "Composición de la Agenda",
-        descripcion: "Qué tipo de trabajo hace el estudio: procesal vs interna, categorías, contexto",
-        href: "/reportes/composicion-tareas",
-        icono: BarChart3,
-        color: "purple",
-        soloAbogado: false
-      },
-      {
-        titulo: "Distribución de expedientes por ubicación geográfica",
-        descripcion: "Organización logística de visitas a tribunales",
-        href: "/reportes/ubicacion-geografica",
-        icono: MapPinned,
-        color: "emerald",
-        soloAbogado: false
-      },
-    ],
+    titulo: "Cumplimiento de Plazos",
+    descripcion: "Cómo se trabajó: eventos cumplidos en plazo, con demora y vencidas",
+    href: "/reportes/cumplimiento-tareas",
+    icono: ClipboardCheck,
+    color: "blue",
+    soloAbogado: false,
   },
   {
-    titulo: "Expedientes",
-    descripcion: "Estado, resultados y valor económico",
-    reportes: [
-      {
-        titulo: "Estado de expedientes por etapa",
-        descripcion: "Dónde están trabados los expedientes y cuáles requieren atención",
-        href: "/reportes/tiempo-por-etapa",
-        icono: Timer,
-        color: "amber",
-        soloAbogado: true  
-      },
-      {
-        titulo: "Resultados de expedientes cerrados",
-        descripcion: "Tasa de éxito, recupero y resultados por motivo de cierre",
-        href: "/reportes/analisis-resultados",
-        icono: Target,
-        color: "rose",
-        soloAbogado: true
-      },
-      {
-        titulo: "Cuantía y Liquidaciones",
-        descripcion: "Capital en expectativa, distribución por tipo y top expedientes",
-        href: "/reportes/cuantia-liquidaciones",
-        icono: Wallet,
-        color: "emerald",
-        soloAbogado: true
-      },
-    ],
+    titulo: "Carga de trabajo",
+    descripcion: "Qué tenés encima hoy: expedientes, agenda, eventos activos y próximos a vencer",
+    href: "/reportes/matriz-carga",
+    icono: Briefcase,
+    color: "cyan",
+    soloAbogado: false,
   },
   {
-    titulo: "Estratégico",
-    descripcion: "Cartera, clientes y rendimiento del estudio",
-    reportes: [
-      {
-        titulo: "Composición de cartera por fuero",
-        descripcion: "Dónde está el volumen y el valor económico del estudio",
-        href: "/reportes/cartera-fuero",
-        icono: PieChart,
-        color: "indigo",
-        soloAbogado: true
-      },
-      {
-        titulo: "Análisis de cartera de clientes",
-        descripcion: "Perfil de la base de clientes: activos, recurrentes, antigüedad",
-        href: "/reportes/cartera-clientes",
-        icono: TrendingUp,
-        color: "emerald",
-        soloAbogado: true
-      },
-      {
-        titulo: "Evolución y tendencia de cartera",
-        descripcion: "Flujo de entrada y salida de expedientes a lo largo del tiempo",
-        href: "/reportes/evolucion-cartera",
-        icono: LineChart,
-        color: "blue",
-        soloAbogado: true
-      },
-      // ⭐ NUEVO REPORTE
-      {
-        titulo: "Índice de esfuerzo vs resultado por cliente",
-        descripcion: "Cuánto trabajo genera cada cliente en relación al valor y resultado que aporta",
-        href: "/reportes/esfuerzo-vs-resultado",
-        icono: Zap,
-        color: "orange",
-        soloAbogado: true
-      },
-    ],
+    titulo: "Composición de la Agenda",
+    descripcion: "Qué tipo de trabajo hace el estudio: procesal vs interna, categorías, contexto",
+    href: "/reportes/composicion-tareas",
+    icono: BarChart3,
+    color: "purple",
+    soloAbogado: false,
+  },
+  {
+    titulo: "Distribución de expedientes por ubicación geográfica",
+    descripcion: "Organización logística de visitas a tribunales",
+    href: "/reportes/ubicacion-geografica",
+    icono: MapPinned,
+    color: "emerald",
+    soloAbogado: false,
+  },
+  {
+    titulo: "Estado de expedientes por etapa",
+    descripcion: "Dónde están trabados los expedientes y cuáles requieren atención",
+    href: "/reportes/tiempo-por-etapa",
+    icono: Timer,
+    color: "amber",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Resultados de expedientes cerrados",
+    descripcion: "Tasa de éxito, recupero y resultados por motivo de cierre",
+    href: "/reportes/analisis-resultados",
+    icono: Target,
+    color: "rose",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Cuantía y Liquidaciones",
+    descripcion: "Capital en expectativa, distribución por tipo y top expedientes",
+    href: "/reportes/cuantia-liquidaciones",
+    icono: Wallet,
+    color: "emerald",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Composición de cartera por fuero",
+    descripcion: "Dónde está el volumen y el valor económico del estudio",
+    href: "/reportes/cartera-fuero",
+    icono: PieChart,
+    color: "indigo",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Análisis de cartera de clientes",
+    descripcion: "Perfil de la base de clientes: activos, recurrentes, antigüedad",
+    href: "/reportes/cartera-clientes",
+    icono: TrendingUp,
+    color: "emerald",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Evolución y tendencia de cartera",
+    descripcion: "Flujo de entrada y salida de expedientes a lo largo del tiempo",
+    href: "/reportes/evolucion-cartera",
+    icono: LineChart,
+    color: "blue",
+    soloAbogado: true,
+  },
+  {
+    titulo: "Actividad por cliente",
+    descripcion: "Cuánto trabajo operativo genera cada cliente en tu cartera",
+    href: "/reportes/esfuerzo-vs-resultado",
+    icono: Zap,
+    color: "orange",
+    soloAbogado: true,
   },
 ]
 
@@ -171,13 +151,8 @@ export default async function ReportesPage() {
 
   const esAbogado = userRol === "ABOGADO"
 
-  // ⭐ Filtrar reportes según rol
-  const bloquesFiltrados = BLOQUES
-    .map(bloque => ({
-      ...bloque,
-      reportes: bloque.reportes.filter(r => !r.soloAbogado || esAbogado)
-    }))
-    .filter(bloque => bloque.reportes.length > 0) // ⭐ Ocultar secciones vacías
+  // Filtrar reportes según rol (los asistentes no ven los soloAbogado)
+  const reportesVisibles = REPORTES.filter(r => !r.soloAbogado || esAbogado)
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -205,50 +180,33 @@ export default async function ReportesPage() {
               </p>
             </div>
 
-            <div className="space-y-10">
-              {bloquesFiltrados.map(bloque => {
-                const cfg_bloque = bloque
+            {/* Grilla plana de reportes (sin secciones) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {reportesVisibles.map(r => {
+                const cfg = COLOR_MAP[r.color]
+                const Icon = r.icono
                 return (
-                  <section key={bloque.titulo} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    {/* ⭐ Título de sección ahora visible */}
-                    <div className="mb-4 border-b border-slate-200 pb-2">
-                      <h2 className="text-base font-bold text-slate-800">
-                        {bloque.titulo}
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {bloque.descripcion}
+                  <Link
+                    key={r.href}
+                    href={r.href}
+                    className="group flex items-start gap-3 p-4 bg-white border border-slate-200 rounded-xl hover:shadow-lg hover:border-blue-300 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                  >
+                    <div className={`p-2.5 rounded-lg ${cfg.bg} shrink-0 group-hover:scale-110 transition-transform`}>
+                      <Icon className={`w-5 h-5 ${cfg.text}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
+                        {r.titulo}
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-slate-500 mt-1 line-clamp-2">
+                        {r.descripcion}
                       </p>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {bloque.reportes.map(r => {
-                        const cfg = COLOR_MAP[r.color]
-                        const Icon = r.icono
-                        return (
-                          <Link
-                            key={r.href}
-                            href={r.href}
-                            className="group flex items-start gap-3 p-4 bg-white border border-slate-200 rounded-xl hover:shadow-lg hover:border-blue-300 transition-all duration-300"
-                          >
-                            <div className={`p-2.5 rounded-lg ${cfg.bg} shrink-0 group-hover:scale-110 transition-transform`}>
-                              <Icon className={`w-5 h-5 ${cfg.text}`} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
-                                {r.titulo}
-                              </p>
-                              <p className="text-[11px] leading-relaxed text-slate-500 mt-1 line-clamp-2">
-                                {r.descripcion}
-                              </p>
-                            </div>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  </section>
+                  </Link>
                 )
               })}
             </div>
+
           </div>
         </main>
       </div>

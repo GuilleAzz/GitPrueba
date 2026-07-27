@@ -31,15 +31,8 @@ interface ZonaGeografica {
   ciudad: string
   provincia: string
   coordenadas: { lat: number; lng: number } | null
-  distanciaKm: number
-  clasificacionDistancia: {
-    tipo: 'local' | 'cercano' | 'medio' | 'lejano'
-    label: string
-    color: string
-  }
   juzgados: JuzgadoAgrupado[]
   totalCasos: number
-  casosUrgentes: number
   casos: CasoUbicacion[]
 }
 
@@ -116,8 +109,7 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
     minute: '2-digit'
   })
 
-  const totalCasos = zonas.reduce((sum, z) => sum + z.totalCasos, 0)
-  const totalUrgentes = zonas.reduce((sum, z) => sum + z.casosUrgentes, 0)
+ const totalCasos = zonas.reduce((sum, z) => sum + z.totalCasos, 0)
 
   // Tabla resumen
   let tablaResumen = `
@@ -128,8 +120,6 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
           <th>Provincia</th>
           <th>Expedientes</th>
           <th>% Total</th>
-          <th>Urgentes</th>
-          <th>Distancia</th>
         </tr>
       </thead>
       <tbody>
@@ -143,8 +133,6 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
         <td>${zona.provincia}</td>
         <td class="center">${zona.totalCasos}</td>
         <td class="center">${porcentaje}%</td>
-        <td class="center ${zona.casosUrgentes > 0 ? 'urgente' : ''}">${zona.casosUrgentes}</td>
-        <td class="center">${zona.distanciaKm} km</td>
       </tr>
     `
   })
@@ -156,8 +144,6 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
           <td colspan="2"><strong>TOTAL</strong></td>
           <td class="center"><strong>${totalCasos}</strong></td>
           <td class="center"><strong>100%</strong></td>
-          <td class="center"><strong>${totalUrgentes}</strong></td>
-          <td></td>
         </tr>
       </tfoot>
     </table>
@@ -170,11 +156,6 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
     detalleZonas += `
       <div class="zona-detalle">
         <h2>Expedientes en ${zona.ciudad}, ${zona.provincia} (${zona.totalCasos})</h2>
-        <p class="zona-info">
-          Distancia: <strong>${zona.distanciaKm} km</strong> &nbsp;|&nbsp;
-          Clasificación: <strong>${zona.clasificacionDistancia.label}</strong>
-          ${zona.casosUrgentes > 0 ? ` &nbsp;|&nbsp; <span class="urgente">${zona.casosUrgentes} urgente(s)</span>` : ''}
-        </p>
         <table class="tabla-casos">
           <thead>
             <tr>
@@ -434,10 +415,6 @@ function generarHTMLReporte(zonas: ZonaGeografica[], vistaGeneral: boolean): str
       <div class="meta-item">
         <span class="meta-label">Zonas</span>
         <span class="meta-valor">${zonas.length}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Urgentes</span>
-        <span class="meta-valor ${totalUrgentes > 0 ? 'urgente-valor' : ''}">${totalUrgentes}</span>
       </div>
     </div>
   </div>

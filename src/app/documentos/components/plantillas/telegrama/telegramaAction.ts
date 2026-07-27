@@ -5,15 +5,25 @@ import fs from 'fs/promises'
 import path from 'path'
 import prisma from "src/lib/db/prisma"
 import { getUserSessionServer } from "src/auth/actions/auth-actions"
+// [OCA] Validación de CUIT con dígito verificador (Opción B: bloquear si inválido)
+import { validarCuit } from "src/lib/utils/cuit"
+// [OCA] Guardar automáticamente la plantilla en el expediente
+import { guardarPlantillaOcaAction } from "src/lib/actions/plantilla-oca-actions"
+import { TipoPlantillaOca } from "@prisma/client"
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ACTION DE TELEGRAMAS — versión final
+// ACTION DE TELEGRAMAS — versión con persistencia automática
 // ═══════════════════════════════════════════════════════════════════════════
-//   • CUIT del destinatario: se escribe sin guiones, al imprimir se formatea
-//     como XX-XXXXXXXX-X (si tiene 11 dígitos).
+//   • CUIT del destinatario: se VALIDA con dígito verificador (módulo 11)
+//     antes de generar. Si no valida, se rechaza (excepto ARCA que no tiene
+//     destinatario). Se escribe sin guiones, al imprimir se formatea como
+//     XX-XXXXXXXX-X (si tiene 11 dígitos).
 //   • Fecha: automática (la del día). El formulario ya no la pide.
 //   • Límites: Renuncia/Ausencia 30 palabras, Otro 1568, ARCA 1187 caracteres.
 //   • Seguridad: sesión + ownership. Aplanado final.
+//   • Persistencia [NUEVO]: después de generar el PDF, se guarda automática-
+//     mente en la tabla plantilla_oca del expediente (tercera esfera del tab
+//     Documentación). El archivo va a Vercel Blob.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface DatosTelegrama {
@@ -34,6 +44,7 @@ export interface DatosTelegrama {
   destinatarioActividad?: string
   destinatarioCp?: string
   cuerpoTexto: string
+  descripcion?: string  // [OCA] opcional, para agregar contexto al guardar
 }
 
 const TAMANO_FUENTE = 10
@@ -43,7 +54,7 @@ type LimiteCuerpo = { unidad: 'palabras' | 'caracteres'; max: number }
 type RenglonConfig = { nombre: string; ancho: number }
 type CuerpoConfig =
   | { tipo: 'renglones'; renglones: RenglonConfig[]; limite: LimiteCuerpo }
-  | { tipo: 'multilinea'; campo: string; limite: LimiteCuerpo }
+  | { tipo: 'multilinea'; campo: string; limite: LimiteCuerpo; fontSize?: number }
 
 interface MapeoCampos {
   remitenteNombre?: string
@@ -107,7 +118,7 @@ const MAPEOS: Record<string, MapeoCampos> = {
     destinatarioActividad: 'Ramo o actividad principal',
     destinatarioCp: 'CP',
     fecha: 'Fecha',
-    cuerpo: { tipo: 'multilinea', campo: 'Campo de texto', limite: { unidad: 'palabras', max: 30 } },
+    cuerpo: { tipo: 'multilinea', campo: 'Campo de texto', limite: { unidad: 'palabras', max: 30 }, fontSize: 8 },
   },
   'otro-tipo-comunicacion-laboral.pdf': {
     remitenteNombre: 'Apellido y nombre REMITENTE',
@@ -158,6 +169,33 @@ function resolverArchivo(tipo: DatosTelegrama['tipoTelegrama']): string {
   }
 }
 
+// [OCA] Mapea el tipo del formulario al enum de Prisma
+function mapearTipoPlantilla(tipo: DatosTelegrama['tipoTelegrama']): TipoPlantillaOca {
+  switch (tipo) {
+    case 'renuncia':
+    case 'comunicacion-renuncia':
+      return 'RENUNCIA'
+    case 'ausencia':
+    case 'hasta-30':
+    case 'comunicacion-ausencia-23789':
+      return 'AUSENCIA'
+    case 'otro':
+    case 'mas-30':
+    case 'otro-tipo-comunicacion-laboral':
+      return 'OTRO'
+    case 'arca':
+    case 'comunicacion-ARCA-articulo-11':
+      return 'ARCA'
+    default:
+      return 'OTRO'
+  }
+}
+
+// [OCA] Los tipos que requieren CUIT del destinatario (todos menos ARCA)
+function requiereCuitDestinatario(tipo: DatosTelegrama['tipoTelegrama']): boolean {
+  return !['arca', 'comunicacion-ARCA-articulo-11'].includes(tipo)
+}
+
 function contarPalabras(texto: string): number {
   return texto.trim().split(/\s+/).filter(Boolean).length
 }
@@ -192,20 +230,15 @@ async function usuarioPuedeAccederCaso(
   rol?: string | null
 ): Promise<boolean> {
   const rolUpper = rol?.toUpperCase()
- 
-  // ADMIN no accede a datos legales (es solo técnico).
   if (rolUpper === "ADMIN") return false
- 
+
   const caso = await prisma.caso.findUnique({
     where: { id: casoId },
     select: { abogadoId: true }
   })
   if (!caso) return false
- 
-  // ASISTENTE tiene acceso general a cualquier expediente del estudio.
+
   if (rolUpper === "ASISTENTE") return true
- 
-  // ABOGADO solo accede a sus propios expedientes.
   return caso.abogadoId === userId
 }
 
@@ -216,6 +249,23 @@ export async function generarTelegramaPdfAction(datos: DatosTelegrama) {
 
     const puedeAcceder = await usuarioPuedeAccederCaso(datos.casoId, user.id, user.rol)
     if (!puedeAcceder) return { success: false, error: "No tenés permiso para generar documentos de este expediente" }
+
+    // [OCA] VALIDACIÓN DE CUIT DEL DESTINATARIO (Opción B: bloquear si inválido)
+    // Se aplica a todos los tipos menos ARCA (que no tiene destinatario editable).
+    if (requiereCuitDestinatario(datos.tipoTelegrama)) {
+      if (!datos.destinatarioCuit || datos.destinatarioCuit.trim().length === 0) {
+        return {
+          success: false,
+          error: "El CUIT del destinatario es obligatorio para este tipo de telegrama."
+        }
+      }
+      if (!validarCuit(datos.destinatarioCuit)) {
+        return {
+          success: false,
+          error: "El CUIT del destinatario no es válido. Verificá que tenga 11 dígitos con dígito verificador correcto (algoritmo módulo 11)."
+        }
+      }
+    }
 
     const nombreArchivoPdf = resolverArchivo(datos.tipoTelegrama)
     const mapeo = MAPEOS[nombreArchivoPdf]
@@ -284,9 +334,18 @@ export async function generarTelegramaPdfAction(datos: DatosTelegrama) {
           const campoPdf = form.getTextField(mapeo.cuerpo.campo)
           if (campoPdf) {
             campoPdf.enableMultiline()
+            // Sin tamaño explícito el campo usa el default del AcroForm, que en
+            // algunos modelos es tan grande que el texto se recorta al aplanar.
+            if (mapeo.cuerpo.fontSize) campoPdf.setFontSize(mapeo.cuerpo.fontSize)
             campoPdf.setText(safeUpper(datos.cuerpoTexto))
           }
-        } catch { /* no existe */ }
+        } catch (e) {
+          console.error(`[OCA] No se pudo escribir el cuerpo en "${mapeo.cuerpo.campo}" de ${nombreArchivoPdf}:`, e)
+          return {
+            success: false,
+            error: `No se pudo escribir el texto en el formulario oficial (campo "${mapeo.cuerpo.campo}").`,
+          }
+        }
       } else {
         const renglonesCfg = mapeo.cuerpo.renglones
         const pals = safeUpper(datos.cuerpoTexto).split(/\s+/).filter(Boolean)
@@ -331,7 +390,54 @@ export async function generarTelegramaPdfAction(datos: DatosTelegrama) {
     const pdfBytesModificados = await pdfDoc.save()
     const pdfBase64 = Buffer.from(pdfBytesModificados).toString('base64')
 
-    return { success: true, pdfBase64 }
+    // [OCA] PERSISTENCIA AUTOMÁTICA
+    // Después de generar el PDF exitosamente, lo guardamos en el expediente.
+    // Si el guardado falla, NO fallamos toda la operación: al menos el usuario
+    // pudo imprimir su OCA. El error se loguea y se devuelve como warning.
+    const pdfBuffer = Buffer.from(pdfBytesModificados)
+    const tipoPlantilla = mapearTipoPlantilla(datos.tipoTelegrama)
+    
+    const resultadoGuardado = await guardarPlantillaOcaAction({
+      casoId: datos.casoId,
+      tipoPlantilla,
+      datos: {
+        // Snapshot completo del formulario (excepto el buffer del PDF)
+        remitenteNombre: datos.remitenteNombre,
+        remitenteDni: datos.remitenteDni,
+        remitenteDomicilio: datos.remitenteDomicilio,
+        remitenteLocalidad: datos.remitenteLocalidad,
+        remitenteProvincia: datos.remitenteProvincia,
+        remitenteTelefono: datos.remitenteTelefono,
+        remitenteCp: datos.remitenteCp,
+        destinatarioNombre: datos.destinatarioNombre,
+        destinatarioCuit: datos.destinatarioCuit,
+        destinatarioDomicilio: datos.destinatarioDomicilio,
+        destinatarioLocalidad: datos.destinatarioLocalidad,
+        destinatarioProvincia: datos.destinatarioProvincia,
+        destinatarioActividad: datos.destinatarioActividad,
+        destinatarioCp: datos.destinatarioCp,
+        cuerpoTexto: datos.cuerpoTexto,
+        fechaGeneracion: new Date().toISOString(),
+      },
+      pdfBuffer,
+      descripcion: datos.descripcion,
+    })
+
+    if (!resultadoGuardado.success) {
+      // El PDF se generó pero no se pudo guardar. Devolvemos el PDF con warning.
+      console.error("[OCA] PDF generado pero falló el guardado:", resultadoGuardado.error)
+      return {
+        success: true,
+        pdfBase64,
+        warning: `PDF generado correctamente pero no se pudo guardar en el expediente: ${resultadoGuardado.error}`
+      }
+    }
+
+    return { 
+      success: true, 
+      pdfBase64,
+      plantillaOcaId: resultadoGuardado.plantillaOcaId,
+    }
 
   } catch (error: any) {
     console.error('Error al generar el PDF del telegrama:', error)

@@ -364,9 +364,8 @@ export default function DespidoView({ setCalculoResult, handleClear }: Calculato
     );
     setResultado(res);
     setCalculoResult({
-      indemnizacionBase: res.subtotalLiquidacion + res.subtotalIndemnizacion,
+      indemnizacionBase: res.totalSinMultas,
       multas: res.totalMultas,
-      intereses: 0,
       total: res.total,
       // ── snapshot para guardar y para PDF futuro ─────────────────────────────
       tipo: 'DESPIDO',

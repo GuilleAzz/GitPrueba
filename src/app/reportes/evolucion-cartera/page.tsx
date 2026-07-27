@@ -1,7 +1,4 @@
 // app/reportes/evolucion-cartera/page.tsx
-// ES-14: Evolución y Tendencia de Cartera
-// Vista personal (ABOGADO): flujo propio + comparativo vs estudio
-// Vista gerencial: todo el estudio, sin cambios
 
 import React from "react"
 import Link from "next/link"
@@ -15,7 +12,7 @@ import {
 import { es } from "date-fns/locale"
 import {
   ArrowLeft, TrendingUp, ArrowUpRight, ArrowDownRight, Minus,
-  Scale, Layers, AlertTriangle, CheckCircle2, Lightbulb
+  Scale, Layers, AlertTriangle, CheckCircle2, Lightbulb, Wallet
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,364 +21,282 @@ import { FiltroTiempo } from "./components/FiltroTiempo"
 import { TablaFlujo } from "./components/Tablaflujo"
 import { TablaComposicion } from "./components/Tablacomposicion"
 import { ToggleVistaEvolucion } from "./components/ToggleVistaEvolucion"
+import { GraficoEvolucion } from "./components/GraficoEvolucion"
 import { redirect, notFound } from "next/navigation"
 import { NotaContextoPeriodo } from "@/app/reportes/components/NotaContextoPeriodo"
 
-// ============================================================================
-// TIPOS
-// ============================================================================
-
-export type PeriodoFlujo = {
-  periodo: string; periodoKey: string
-  ingresados: number; cerrados: number; balance: number
-  carteraActiva: number; variacionIngresos: number | null; variacionCierres: number | null
-}
-
-export type ComposicionTipo = {
-  tipo: string; tipoLabel: string
-  cantidadAnterior: number; cantidadActual: number
-  porcentajeAnterior: number; porcentajeActual: number
-  variacionPuntos: number; tendencia: 'sube' | 'baja' | 'estable'
-}
-
-export type Observacion = { tipo: 'info' | 'alerta' | 'positivo'; texto: string }
-
-// ============================================================================
-// CONFIG
-// ============================================================================
-
-const PERIODOS_DISPONIBLES = [
-  { key: '60',  label: 'Últimos 60 días',  dias: 60  },
-  { key: '90',  label: 'Últimos 90 días',  dias: 90  },
-  { key: '120', label: 'Últimos 120 días', dias: 120 },
-  { key: '180', label: 'Últimos 6 meses',  dias: 180 },
-  { key: '365', label: 'Último año',       dias: 365 },
+const PERIODOS = [
+  { key: "30",  label: "Últimos 30 días",  dias: 30 },
+  { key: "90",  label: "Últimos 90 días",  dias: 90 },
+  { key: "180", label: "Últimos 6 meses",  dias: 180 },
+  { key: "365", label: "Últimos 12 meses", dias: 365 },
 ]
 
-const TIPO_LABELS: Record<string, string> = {
-  'LABORAL': 'Laboral', 'CIVIL_COMERCIAL': 'Civil y Comercial',
-  'FAMILIA': 'Familia', 'SUCESIONES': 'Sucesiones',
-  'CONTENCIOSO_ADMINISTRATIVO': 'Cont. Administrativo', 'PENAL': 'Penal',
-}
-
-// ============================================================================
-// QUERY GERENCIAL — sin cambios
-// ============================================================================
-
-async function obtenerDatosGerencial(diasFiltro: number) {
-  const hoy = new Date()
-  const fechaDesde = subDays(hoy, diasFiltro)
-  const fechaDesdeAnterior = subDays(fechaDesde, diasFiltro)
-
-  const todosCasos = await prisma.caso.findMany({
-    select: { id: true, tipo: true, fechaInicio: true, estaCerrado: true, fechaCierre: true, motivoCierre: true }
-  })
-
-  const ingresadosPeriodo = todosCasos.filter(c =>
-    isAfter(c.fechaInicio, fechaDesde) || c.fechaInicio.getTime() === fechaDesde.getTime()
-  )
-  const cerradosPeriodo = todosCasos.filter(c =>
-    c.estaCerrado && c.fechaCierre &&
-    (isAfter(c.fechaCierre, fechaDesde) || c.fechaCierre.getTime() === fechaDesde.getTime())
-  )
-  const carteraActivaTotal = todosCasos.filter(c => !c.estaCerrado).length
-  const balanceNeto = ingresadosPeriodo.length - cerradosPeriodo.length
-
-  const ingresadosAnterior = todosCasos.filter(c =>
-    isAfter(c.fechaInicio, fechaDesdeAnterior) && isBefore(c.fechaInicio, fechaDesde)
-  )
-  const cerradosAnterior = todosCasos.filter(c =>
-    c.estaCerrado && c.fechaCierre &&
-    isAfter(c.fechaCierre, fechaDesdeAnterior) && isBefore(c.fechaCierre, fechaDesde)
-  )
-
-  const variacionIngresos = ingresadosAnterior.length > 0
-    ? Math.round(((ingresadosPeriodo.length - ingresadosAnterior.length) / ingresadosAnterior.length) * 100) : null
-  const variacionCierres = cerradosAnterior.length > 0
-    ? Math.round(((cerradosPeriodo.length - cerradosAnterior.length) / cerradosAnterior.length) * 100) : null
-
-  const mesesAtras = Math.max(Math.ceil(diasFiltro / 30), 2)
-  const flujoMensual: PeriodoFlujo[] = []
-
-  for (let i = mesesAtras - 1; i >= 0; i--) {
-    const mesInicio = startOfMonth(subDays(hoy, i * 30))
-    const mesFin = startOfMonth(subDays(hoy, (i - 1) * 30))
-    const mesFinReal = i === 0 ? hoy : mesFin
-
-    const ingresadosMes = todosCasos.filter(c =>
-      (isAfter(c.fechaInicio, mesInicio) || c.fechaInicio.getTime() === mesInicio.getTime()) &&
-      isBefore(c.fechaInicio, mesFinReal)
-    ).length
-
-    const cerradosMes = todosCasos.filter(c =>
-      c.estaCerrado && c.fechaCierre &&
-      (isAfter(c.fechaCierre, mesInicio) || c.fechaCierre.getTime() === mesInicio.getTime()) &&
-      isBefore(c.fechaCierre, mesFinReal)
-    ).length
-
-    const carteraAlFinalMes = todosCasos.filter(c =>
-      (isBefore(c.fechaInicio, mesFinReal) || c.fechaInicio.getTime() === mesFinReal.getTime()) &&
-      (!c.estaCerrado || (c.fechaCierre && isAfter(c.fechaCierre, mesFinReal)))
-    ).length
-
-    const anterior = flujoMensual[flujoMensual.length - 1]
-    flujoMensual.push({
-      periodo: format(mesInicio, 'MMM yyyy', { locale: es }),
-      periodoKey: format(mesInicio, 'yyyy-MM'),
-      ingresados: ingresadosMes, cerrados: cerradosMes,
-      balance: ingresadosMes - cerradosMes, carteraActiva: carteraAlFinalMes,
-      variacionIngresos: anterior && anterior.ingresados > 0
-        ? Math.round(((ingresadosMes - anterior.ingresados) / anterior.ingresados) * 100) : null,
-      variacionCierres: anterior && anterior.cerrados > 0
-        ? Math.round(((cerradosMes - anterior.cerrados) / cerradosMes) * 100) : null,
-    })
-  }
-
-  const ingresadosActualPorTipo = new Map<string, number>()
-  const ingresadosAnteriorPorTipo = new Map<string, number>()
-  ingresadosPeriodo.forEach(c => {
-    const tipo = c.tipo || 'OTRO'
-    ingresadosActualPorTipo.set(tipo, (ingresadosActualPorTipo.get(tipo) || 0) + 1)
-  })
-  ingresadosAnterior.forEach(c => {
-    const tipo = c.tipo || 'OTRO'
-    ingresadosAnteriorPorTipo.set(tipo, (ingresadosAnteriorPorTipo.get(tipo) || 0) + 1)
-  })
-
-  const todosLosTipos = new Set([...ingresadosActualPorTipo.keys(), ...ingresadosAnteriorPorTipo.keys()])
-  const totalActual = ingresadosPeriodo.length || 1
-  const totalAnterior = ingresadosAnterior.length || 1
-
-  const composicion: ComposicionTipo[] = Array.from(todosLosTipos)
-    .map(tipo => {
-      const cantActual = ingresadosActualPorTipo.get(tipo) || 0
-      const cantAnterior = ingresadosAnteriorPorTipo.get(tipo) || 0
-      const pctActual = Math.round((cantActual / totalActual) * 100)
-      const pctAnterior = Math.round((cantAnterior / totalAnterior) * 100)
-      const variacion = pctActual - pctAnterior
-      return {
-        tipo, tipoLabel: TIPO_LABELS[tipo] || tipo,
-        cantidadAnterior: cantAnterior, cantidadActual: cantActual,
-        porcentajeAnterior: pctAnterior, porcentajeActual: pctActual,
-        variacionPuntos: variacion,
-        tendencia: variacion > 2 ? 'sube' as const : variacion < -2 ? 'baja' as const : 'estable' as const,
-      }
-    })
-    .sort((a, b) => b.cantidadActual - a.cantidadActual)
-
-  const observaciones: Observacion[] = []
-  if (balanceNeto > 3) {
-    observaciones.push({ tipo: 'alerta', texto: `Se están acumulando casos: ingresaron ${ingresadosPeriodo.length} y se cerraron ${cerradosPeriodo.length} en el período. Balance neto: +${balanceNeto}.` })
-  } else if (balanceNeto < -2) {
-    observaciones.push({ tipo: 'positivo', texto: `Se cerraron más casos de los que ingresaron (${cerradosPeriodo.length} cierres vs ${ingresadosPeriodo.length} ingresos). La cartera se está reduciendo.` })
-  } else {
-    observaciones.push({ tipo: 'info', texto: `El flujo está equilibrado: ${ingresadosPeriodo.length} ingresos y ${cerradosPeriodo.length} cierres en el período.` })
-  }
-  if (variacionIngresos !== null) {
-    if (variacionIngresos > 20) observaciones.push({ tipo: 'info', texto: `Los ingresos crecieron un ${variacionIngresos}% respecto al período anterior. Mayor demanda de servicios.` })
-    else if (variacionIngresos < -20) observaciones.push({ tipo: 'alerta', texto: `Los ingresos cayeron un ${Math.abs(variacionIngresos)}% respecto al período anterior.` })
-  }
-  const tipoQueMasCrece = composicion.find(c => c.tendencia === 'sube')
-  if (tipoQueMasCrece && tipoQueMasCrece.variacionPuntos > 5) {
-    observaciones.push({ tipo: 'info', texto: `${tipoQueMasCrece.tipoLabel} ganó ${tipoQueMasCrece.variacionPuntos} puntos de participación. El perfil del estudio está virando hacia esta materia.` })
-  }
-  if (carteraActivaTotal > 30) observaciones.push({ tipo: 'alerta', texto: `La cartera activa tiene ${carteraActivaTotal} casos. Evaluar la capacidad operativa del equipo.` })
-  if (ingresadosPeriodo.length === 0) observaciones.push({ tipo: 'alerta', texto: `No se registraron ingresos de casos nuevos en el período seleccionado.` })
-
-  return {
-    kpis: { ingresados: ingresadosPeriodo.length, cerrados: cerradosPeriodo.length, balanceNeto, carteraActiva: carteraActivaTotal, variacionIngresos, variacionCierres },
-    flujoMensual, composicion, observaciones,
-  }
-}
-
-// ============================================================================
-// QUERY PERSONAL — sin cambios
-// ============================================================================
-
-async function obtenerDatosPersonal(abogadoId: string, diasFiltro: number) {
-  const hoy = new Date()
-  const fechaDesde = subDays(hoy, diasFiltro)
-  const fechaDesdeAnterior = subDays(fechaDesde, diasFiltro)
-
-  const casosPropios = await prisma.caso.findMany({
-    where: { abogadoId },
-    select: { id: true, tipo: true, fechaInicio: true, estaCerrado: true, fechaCierre: true }
-  })
-
-  const todosLosCasos = await prisma.caso.findMany({
-    select: { id: true, fechaInicio: true, estaCerrado: true, fechaCierre: true }
-  })
-  const totalAbogados = await prisma.user.count({ where: { rol: 'ABOGADO', isActive: true } })
-
-  const ingresadosPeriodo = casosPropios.filter(c =>
-    isAfter(c.fechaInicio, fechaDesde) || c.fechaInicio.getTime() === fechaDesde.getTime()
-  )
-  const cerradosPeriodo = casosPropios.filter(c =>
-    c.estaCerrado && c.fechaCierre &&
-    (isAfter(c.fechaCierre, fechaDesde) || c.fechaCierre.getTime() === fechaDesde.getTime())
-  )
-  const carteraActivaPropia = casosPropios.filter(c => !c.estaCerrado).length
-  const balanceNeto = ingresadosPeriodo.length - cerradosPeriodo.length
-
-  const ingresadosAnterior = casosPropios.filter(c =>
-    isAfter(c.fechaInicio, fechaDesdeAnterior) && isBefore(c.fechaInicio, fechaDesde)
-  )
-  const cerradosAnterior = casosPropios.filter(c =>
-    c.estaCerrado && c.fechaCierre &&
-    isAfter(c.fechaCierre, fechaDesdeAnterior) && isBefore(c.fechaCierre, fechaDesde)
-  )
-
-  const variacionIngresos = ingresadosAnterior.length > 0
-    ? Math.round(((ingresadosPeriodo.length - ingresadosAnterior.length) / ingresadosAnterior.length) * 100) : null
-  const variacionCierres = cerradosAnterior.length > 0
-    ? Math.round(((cerradosPeriodo.length - cerradosAnterior.length) / cerradosAnterior.length) * 100) : null
-
-  const ingresadosEstudio = todosLosCasos.filter(c =>
-    isAfter(c.fechaInicio, fechaDesde) || c.fechaInicio.getTime() === fechaDesde.getTime()
-  ).length
-  const cerradosEstudio = todosLosCasos.filter(c =>
-    c.estaCerrado && c.fechaCierre &&
-    (isAfter(c.fechaCierre, fechaDesde) || c.fechaCierre.getTime() === fechaDesde.getTime())
-  ).length
-  const promedioIngresadosEstudio = totalAbogados > 0
-    ? Math.round((ingresadosEstudio / totalAbogados) * 10) / 10 : 0
-  const promedioCerradosEstudio = totalAbogados > 0
-    ? Math.round((cerradosEstudio / totalAbogados) * 10) / 10 : 0
-
-  const mesesAtras = Math.max(Math.ceil(diasFiltro / 30), 2)
-  const flujoMensual: PeriodoFlujo[] = []
-
-  for (let i = mesesAtras - 1; i >= 0; i--) {
-    const mesInicio = startOfMonth(subDays(hoy, i * 30))
-    const mesFin = startOfMonth(subDays(hoy, (i - 1) * 30))
-    const mesFinReal = i === 0 ? hoy : mesFin
-
-    const ingresadosMes = casosPropios.filter(c =>
-      (isAfter(c.fechaInicio, mesInicio) || c.fechaInicio.getTime() === mesInicio.getTime()) &&
-      isBefore(c.fechaInicio, mesFinReal)
-    ).length
-
-    const cerradosMes = casosPropios.filter(c =>
-      c.estaCerrado && c.fechaCierre &&
-      (isAfter(c.fechaCierre, mesInicio) || c.fechaCierre.getTime() === mesInicio.getTime()) &&
-      isBefore(c.fechaCierre, mesFinReal)
-    ).length
-
-    const carteraAlFinalMes = casosPropios.filter(c =>
-      (isBefore(c.fechaInicio, mesFinReal) || c.fechaInicio.getTime() === mesFinReal.getTime()) &&
-      (!c.estaCerrado || (c.fechaCierre && isAfter(c.fechaCierre, mesFinReal)))
-    ).length
-
-    const anterior = flujoMensual[flujoMensual.length - 1]
-    flujoMensual.push({
-      periodo: format(mesInicio, 'MMM yyyy', { locale: es }),
-      periodoKey: format(mesInicio, 'yyyy-MM'),
-      ingresados: ingresadosMes, cerrados: cerradosMes,
-      balance: ingresadosMes - cerradosMes, carteraActiva: carteraAlFinalMes,
-      variacionIngresos: anterior && anterior.ingresados > 0
-        ? Math.round(((ingresadosMes - anterior.ingresados) / anterior.ingresados) * 100) : null,
-      variacionCierres: anterior && anterior.cerrados > 0
-        ? Math.round(((cerradosMes - anterior.cerrados) / anterior.cerrados) * 100) : null,
-    })
-  }
-
-  const observaciones: Observacion[] = []
-  if (balanceNeto > 3) {
-    observaciones.push({ tipo: 'alerta', texto: `Tu cartera está creciendo: ingresaron ${ingresadosPeriodo.length} casos y cerraste ${cerradosPeriodo.length} en el período.` })
-  } else if (balanceNeto < -2) {
-    observaciones.push({ tipo: 'positivo', texto: `Cerraste más casos de los que ingresaron (${cerradosPeriodo.length} cierres vs ${ingresadosPeriodo.length} ingresos). Tu cartera se está reduciendo.` })
-  } else {
-    observaciones.push({ tipo: 'info', texto: `Tu flujo está equilibrado: ${ingresadosPeriodo.length} ingresos y ${cerradosPeriodo.length} cierres en el período.` })
-  }
-  if (ingresadosPeriodo.length > promedioIngresadosEstudio + 2) {
-    observaciones.push({ tipo: 'info', texto: `Ingresaste ${ingresadosPeriodo.length} casos, por encima del promedio del estudio (${promedioIngresadosEstudio} por abogado).` })
-  } else if (ingresadosPeriodo.length < promedioIngresadosEstudio - 2 && promedioIngresadosEstudio > 0) {
-    observaciones.push({ tipo: 'info', texto: `Ingresaste ${ingresadosPeriodo.length} casos, por debajo del promedio del estudio (${promedioIngresadosEstudio} por abogado).` })
-  }
-  if (carteraActivaPropia > 15) {
-    observaciones.push({ tipo: 'alerta', texto: `Tenés ${carteraActivaPropia} expedientes activos. Revisá tu carga operativa.` })
-  }
-
-  return {
-    kpis: {
-      ingresados: ingresadosPeriodo.length,
-      cerrados: cerradosPeriodo.length,
-      balanceNeto,
-      carteraActiva: carteraActivaPropia,
-      variacionIngresos,
-      variacionCierres,
-      promedioIngresadosEstudio,
-      promedioCerradosEstudio,
-    },
-    flujoMensual,
-    observaciones,
-  }
-}
-
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
-
-export default async function EvolucionCarteraPage({
+export default async function ReporteEvolucionCarteraPage({
   searchParams
 }: {
-  searchParams: Promise<{ periodo?: string; vista?: string }>
+  searchParams: { periodo?: string; vista?: string }
 }) {
   const user = await getUserSessionServer()
   if (!user) redirect("/api/auth/signin")
 
   const userRol = user.rol?.toUpperCase()
-  if (userRol === 'CLIENTE' || userRol === 'ADMIN') notFound()
-  if (userRol === 'ASISTENTE') redirect("/reportes")
 
-  const params = await searchParams
-  const periodoKey = params?.periodo || '180'
-  const periodoConfig = PERIODOS_DISPONIBLES.find(p => p.key === periodoKey) || PERIODOS_DISPONIBLES[3]
-  const diasFiltro = periodoConfig.dias
+  // Solo abogados y admin pueden ver este reporte
+  if (userRol === "CLIENTE" || userRol === "ASISTENTE") notFound()
 
-  // Rango para la nota contextual: usa el período que eligió el usuario
-const hoyDate = new Date()
-const desdeDate = subDays(hoyDate, diasFiltro)
-const desdeISO = desdeDate.toISOString()
-const hastaISO = hoyDate.toISOString()
+  const esAdmin = userRol === "ADMIN"
 
-  const esAbogado = userRol === 'ABOGADO'
-  const vistaParam = params?.vista
-  const vistaPersonal = esAbogado && vistaParam !== 'gerencial'
+  // ── Toggle personal/gerencial (para abogados) ────────────────────────────
+  const vistaParam = searchParams.vista === 'gerencial' ? 'gerencial' : 'personal'
+  const vistaActual: 'personal' | 'gerencial' = esAdmin ? 'gerencial' : vistaParam
 
-  const [datosGerencial, datosPersonal] = await Promise.all([
-    !vistaPersonal ? obtenerDatosGerencial(diasFiltro) : Promise.resolve(null),
-    vistaPersonal ? obtenerDatosPersonal(user.id, diasFiltro) : Promise.resolve(null),
+  // ── Filtrado por abogado según vista ─────────────────────────────────────
+  const filtroAbogado = vistaActual === 'personal'
+    ? { abogadoId: user.id }
+    : {}
+
+  // ── Rango de tiempo ──────────────────────────────────────────────────────
+  const periodoKey = searchParams.periodo || "180"
+  const periodoObj = PERIODOS.find(p => p.key === periodoKey) || PERIODOS[2]
+  const diasRango  = periodoObj.dias
+
+  const hoy = new Date()
+  const desde = subDays(hoy, diasRango)
+
+  // ── Data cruda ───────────────────────────────────────────────────────────
+  const [casosIngresados, casosCerrados, todosCasosActivos] = await Promise.all([
+    // Casos con fechaInicio en el rango (INGRESOS)
+    prisma.caso.findMany({
+      where: {
+        ...filtroAbogado,
+        fechaInicio: { gte: desde, lte: hoy },
+        esTraspasado: false,
+      },
+      select: {
+        id: true,
+        fechaInicio: true,
+        fuero: true,
+      },
+    }),
+
+    // Casos cerrados en el rango (CIERRES)
+    prisma.caso.findMany({
+      where: {
+        ...filtroAbogado,
+        estaCerrado: true,
+        fechaCierre: { gte: desde, lte: hoy },
+        esTraspasado: false,
+      },
+      select: {
+        id: true,
+        fechaCierre: true,
+        fuero: true,
+      },
+    }),
+
+    // Cartera activa AL DÍA DE HOY (para el nuevo KPI)
+    prisma.caso.count({
+      where: {
+        ...filtroAbogado,
+        estaCerrado: false,
+        esTraspasado: false,
+      },
+    }),
   ])
 
-  const kpis = vistaPersonal ? datosPersonal!.kpis : datosGerencial!.kpis
-  const flujoMensual = vistaPersonal ? datosPersonal!.flujoMensual : datosGerencial!.flujoMensual
-  const composicion = !vistaPersonal ? datosGerencial!.composicion : null
-  const observaciones = vistaPersonal ? datosPersonal!.observaciones : datosGerencial!.observaciones
+  const totalIngresos = casosIngresados.length
+  const totalCierres  = casosCerrados.length
+  const crecimientoTotal = totalIngresos - totalCierres    // renombrado de "netoTotal"
 
-  // Para el ícono del Balance Neto: cambia según el signo, sigue siendo informativo
-  const balanceIcon = kpis.balanceNeto > 0
-    ? <ArrowUpRight className="w-5 h-5 text-amber-600" />
-    : kpis.balanceNeto < 0
-    ? <ArrowDownRight className="w-5 h-5 text-emerald-600" />
-    : <Minus className="w-5 h-5 text-slate-500" />
-  const balanceIconBg = kpis.balanceNeto > 0
-    ? "bg-amber-100"
-    : kpis.balanceNeto < 0
-    ? "bg-emerald-100"
-    : "bg-slate-100"
+  // ── Composición por FUERO ────────────────────────────────────────────────
+  const composicionIngresos = new Map<string, number>()
+  for (const c of casosIngresados) {
+    const f = c.fuero ?? "SIN_ESPECIFICAR"
+    composicionIngresos.set(f, (composicionIngresos.get(f) || 0) + 1)
+  }
+  const composicionCierres = new Map<string, number>()
+  for (const c of casosCerrados) {
+    const f = c.fuero ?? "SIN_ESPECIFICAR"
+    composicionCierres.set(f, (composicionCierres.get(f) || 0) + 1)
+  }
+  const top3Ingresos = [...composicionIngresos.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([fuero, count]) => ({
+      fuero,
+      count,
+      pct: totalIngresos > 0 ? (count / totalIngresos) * 100 : 0
+    }))
+  const top3Cierres = [...composicionCierres.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([fuero, count]) => ({
+      fuero,
+      count,
+      pct: totalCierres > 0 ? (count / totalCierres) * 100 : 0
+    }))
 
+  // ── Serie mensual ────────────────────────────────────────────────────────
+  // Cantidad de meses a agrupar según el rango
+  const cantMeses = Math.max(1, Math.ceil(diasRango / 30))
+  const filasMap = new Map<string, { ingresos: number; cierres: number }>()
+  const ordenKeys: string[] = []
+
+  for (let i = cantMeses - 1; i >= 0; i--) {
+    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+    const key = format(fecha, "yyyy-MM")
+    ordenKeys.push(key)
+    filasMap.set(key, { ingresos: 0, cierres: 0 })
+  }
+
+  for (const c of casosIngresados) {
+    if (!c.fechaInicio) continue
+    const key = format(c.fechaInicio, "yyyy-MM")
+    if (filasMap.has(key)) {
+      filasMap.get(key)!.ingresos++
+    }
+  }
+  for (const c of casosCerrados) {
+    if (!c.fechaCierre) continue
+    const key = format(c.fechaCierre, "yyyy-MM")
+    if (filasMap.has(key)) {
+      filasMap.get(key)!.cierres++
+    }
+  }
+
+  // ── Cálculo de cartera acumulada ────────────────────────────────────────
+  // Punto de partida: cartera activa AL INICIO del rango
+  // Fórmula: casos con fechaInicio antes del rango que NO estaban cerrados al inicio
+  const carteraInicial = await prisma.caso.count({
+    where: {
+      ...filtroAbogado,
+      fechaInicio: { lt: desde },
+      esTraspasado: false,
+      OR: [
+        { estaCerrado: false },
+        { fechaCierre: { gte: desde } },
+      ],
+    },
+  })
+
+  // Ahora arrastramos el balance mes a mes
+  let carteraAcum = carteraInicial
+  const filasMensuales = ordenKeys.map(key => {
+    const info = filasMap.get(key)!
+    carteraAcum += (info.ingresos - info.cierres)
+    return {
+      key,
+      label: format(new Date(key + "-01"), "MMM yyyy", { locale: es }),
+      ingresos: info.ingresos,
+      cierres: info.cierres,
+      balance: info.ingresos - info.cierres,
+      carteraAcumulada: carteraAcum,
+      ingresosMesAnterior: 0,   // (no se usa ahora que sacamos los %, se calcula abajo por si algo depende)
+      cierresMesAnterior: 0,
+    }
+  })
+
+  // Rellenar mes anterior para posible uso futuro (no muestra %, pero deja el dato)
+  for (let i = 0; i < filasMensuales.length; i++) {
+    if (i > 0) {
+      filasMensuales[i].ingresosMesAnterior = filasMensuales[i - 1].ingresos
+      filasMensuales[i].cierresMesAnterior  = filasMensuales[i - 1].cierres
+    }
+  }
+
+  // ── Tendencia mes a mes ──────────────────────────────────────────────────
+  // Comparamos media reciente (primera mitad) vs media anterior (segunda mitad)
+  // Para calcular VARIACIÓN. Si la base es 0 → null (no se muestra %)
+  const mitadReciente = Math.ceil(filasMensuales.length / 2)
+  const mesesRecientes = filasMensuales.slice(-mitadReciente)
+  const mesesAnteriores = filasMensuales.slice(0, filasMensuales.length - mitadReciente)
+
+  const mediaReciente = mesesRecientes.length > 0
+    ? mesesRecientes.reduce((s, m) => s + m.ingresos, 0) / mesesRecientes.length
+    : 0
+  const mediaAnterior = mesesAnteriores.length > 0
+    ? mesesAnteriores.reduce((s, m) => s + m.ingresos, 0) / mesesAnteriores.length
+    : 0
+
+  const cierresMediaReciente = mesesRecientes.length > 0
+    ? mesesRecientes.reduce((s, m) => s + m.cierres, 0) / mesesRecientes.length
+    : 0
+  const cierresMediaAnterior = mesesAnteriores.length > 0
+    ? mesesAnteriores.reduce((s, m) => s + m.cierres, 0) / mesesAnteriores.length
+    : 0
+
+  // NULL cuando no hay base de comparación (evitamos porcentajes "sin sentido")
+  const variacionIngresos = mediaAnterior > 0
+    ? ((mediaReciente - mediaAnterior) / mediaAnterior) * 100
+    : null
+  const variacionCierres = cierresMediaAnterior > 0
+    ? ((cierresMediaReciente - cierresMediaAnterior) / cierresMediaAnterior) * 100
+    : null
+
+  // Tendencia solo si tenemos variación
+  const tendencia = variacionIngresos === null
+    ? 'sin_base' as const
+    : variacionIngresos > 10
+      ? 'crecimiento' as const
+      : variacionIngresos < -10
+        ? 'contraccion' as const
+        : 'estable' as const
+
+  // ── Insights (recomendaciones) ───────────────────────────────────────────
+  const insights: Array<{
+    tipo: 'positivo' | 'negativo' | 'neutro',
+    titulo: string,
+    descripcion: string
+  }> = []
+
+  if (crecimientoTotal > 0) {
+    insights.push({
+      tipo: 'positivo',
+      titulo: 'Cartera en crecimiento',
+      descripcion: `Entraron ${totalIngresos} expedientes y cerraste ${totalCierres} en los últimos ${diasRango} días. Neto: +${crecimientoTotal}.`
+    })
+  } else if (crecimientoTotal < 0) {
+    insights.push({
+      tipo: 'negativo',
+      titulo: 'Cartera en contracción',
+      descripcion: `Cerraste más expedientes de los que ingresaste (${Math.abs(crecimientoTotal)} menos). Puede reflejar un ciclo de resolución de casos viejos.`
+    })
+  } else {
+    insights.push({
+      tipo: 'neutro',
+      titulo: 'Cartera estable',
+      descripcion: `Ingresos y cierres se equilibran en el período (${totalIngresos} vs ${totalCierres}).`
+    })
+  }
+
+  if (tendencia === 'crecimiento' && variacionIngresos !== null) {
+    insights.push({
+      tipo: 'positivo',
+      titulo: 'Tendencia positiva',
+      descripcion: `Los ingresos crecen ${variacionIngresos.toFixed(0)}% comparando la primera y la segunda mitad del período.`
+    })
+  } else if (tendencia === 'contraccion' && variacionIngresos !== null) {
+    insights.push({
+      tipo: 'negativo',
+      titulo: 'Tendencia negativa',
+      descripcion: `Los ingresos bajaron ${Math.abs(variacionIngresos).toFixed(0)}% en la segunda mitad del período.`
+    })
+  }
+
+  const totalMovimientos = totalIngresos + totalCierres
+
+  // ── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header />
-
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 <Link href="/reportes">
                   <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-800 gap-2">
@@ -391,129 +306,194 @@ const hastaISO = hoyDate.toISOString()
                 </Link>
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                    <TrendingUp className="h-6 w-6 text-emerald-600" />
-                    Evolución y tendencia de la cartera
+                    <TrendingUp className="h-6 w-6 text-blue-600" />
+                    Evolución y tendencia de cartera
                   </h1>
                   <p className="text-sm text-slate-500">
-                    {vistaPersonal
-                      ? "Cómo venís: tus ingresos vs cierres por período"
-                      : "Cómo venimos: ingresos vs cierres por período y cambio en el perfil del estudio"
-                    }
+                    {vistaActual === 'personal' && !esAdmin
+                      ? "Flujo de expedientes de tu cartera personal"
+                      : "Flujo de expedientes del estudio completo"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <FiltroTiempo
-                  periodos={PERIODOS_DISPONIBLES.map(p => ({ key: p.key, label: p.label }))}
-                  periodoActual={periodoKey}
-                />
+              <div className="flex items-center gap-3 flex-wrap">
+                {!esAdmin && <ToggleVistaEvolucion vistaActual={vistaActual} />}
+                <FiltroTiempo periodos={PERIODOS} periodoActual={periodoObj.key} />
               </div>
             </div>
 
-            {esAbogado && (
-              <div className="mb-6">
-                <ToggleVistaEvolucion vistaActual={vistaPersonal ? 'personal' : 'gerencial'} />
-              </div>
-            )}
-
+            {/* Nota de contexto del período */}
             <NotaContextoPeriodo
-              desde={desdeISO}
-              hasta={hastaISO}
-              rangoLabel={periodoConfig.label.toLowerCase()}
+              desde={desde.toISOString()}
+              hasta={hoy.toISOString()}
+              rangoLabel={periodoObj.label.toLowerCase()}
             />
-            {/* ═══ KPIs ESTANDARIZADOS ═══
-                Mismo patrón que cartera-fuero: card blanca neutra, color contenido en el ícono.
-                La variación porcentual sí mantiene color (verde/rojo) porque comunica un cambio
-                positivo o negativo — pero como detalle pequeño, no como protagonista. */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <KpiCard
-                label="Ingresados"
-                value={kpis.ingresados}
-                variacion={kpis.variacionIngresos}
-                icon={<ArrowUpRight className="w-5 h-5 text-blue-600" />}
-                iconBg="bg-blue-100"
-                comparativo={vistaPersonal && 'promedioIngresadosEstudio' in kpis
-                  ? `Prom. estudio: ${kpis.promedioIngresadosEstudio}`
-                  : undefined}
-              />
-              <KpiCard
-                label="Cerrados"
-                value={kpis.cerrados}
-                variacion={kpis.variacionCierres}
-                icon={<Scale className="w-5 h-5 text-emerald-600" />}
-                iconBg="bg-emerald-100"
-                comparativo={vistaPersonal && 'promedioCerradosEstudio' in kpis
-                  ? `Prom. estudio: ${kpis.promedioCerradosEstudio}`
-                  : undefined}
-              />
-              <KpiCard
-                label="Balance Neto"
-                value={kpis.balanceNeto}
-                variacion={null}
-                icon={balanceIcon}
-                iconBg={balanceIconBg}
-                prefijo={kpis.balanceNeto > 0 ? '+' : ''}
-              />
-              <KpiCard
-                label={vistaPersonal ? "Mis expedientes activos" : "Cartera Activa"}
-                value={kpis.carteraActiva}
-                variacion={null}
-                icon={<Layers className="w-5 h-5 text-indigo-600" />}
-                iconBg="bg-indigo-100"
-              />
+
+            {/* ═══ KPIs ═══ */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <Card className="border-slate-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-50 rounded-lg">
+                      <ArrowUpRight className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Ingresos totales</p>
+                      <p className="text-2xl font-bold text-slate-900">{totalIngresos}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Expedientes abiertos en el rango</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-50 rounded-lg">
+                      <ArrowDownRight className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Cierres totales</p>
+                      <p className="text-2xl font-bold text-slate-900">{totalCierres}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Expedientes cerrados en el rango</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* KPI: Crecimiento (renombrado de "Balance neto") */}
+              <Card className="border-slate-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      crecimientoTotal > 0 ? "bg-emerald-50" :
+                      crecimientoTotal < 0 ? "bg-rose-50" : "bg-slate-100"
+                    }`}>
+                      {crecimientoTotal > 0 ? <ArrowUpRight className="w-5 h-5 text-emerald-600" /> :
+                       crecimientoTotal < 0 ? <ArrowDownRight className="w-5 h-5 text-rose-600" /> :
+                       <Minus className="w-5 h-5 text-slate-500" />}
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Crecimiento del período</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {crecimientoTotal > 0 ? "+" : ""}{crecimientoTotal}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {crecimientoTotal > 0 ? "La cartera creció"
+                          : crecimientoTotal < 0 ? "La cartera se achicó"
+                          : "La cartera se mantuvo estable"}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* KPI: Cartera activa (reemplaza "Ratio de recuperación") */}
+              <Card className="border-slate-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <Wallet className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Cartera activa</p>
+                      <p className="text-2xl font-bold text-slate-900">{todosCasosActivos}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Total al día de hoy (arrancó en {carteraInicial})
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            <TablaFlujo datos={flujoMensual} />
+            {/* ═══ GRÁFICO COMBINADO (nuevo) ═══ */}
+            <div className="mb-6">
+              <GraficoEvolucion filas={filasMensuales} carteraInicial={carteraInicial} />
+            </div>
 
-            {composicion && (
-              <TablaComposicion datos={composicion} periodoLabel={periodoConfig.label} />
-            )}
+            {/* ═══ TABLA DE FLUJO POR MES ═══ */}
+            <Card className="mb-6 border-slate-200 shadow-sm">
+              <CardHeader className="border-b bg-slate-50/50 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <Layers className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-slate-800">
+                      Flujo de expedientes por mes
+                    </CardTitle>
+                    <CardDescription>
+                      Detalle numérico mes a mes del rango seleccionado.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <TablaFlujo filas={filasMensuales} />
+              </CardContent>
+            </Card>
 
-            {observaciones.length > 0 && (
+
+            {/* ═══ INSIGHTS ═══ */}
+            {insights.length > 0 && (
               <Card className="mb-6 border-slate-200 shadow-sm">
                 <CardHeader className="border-b bg-slate-50/50 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-violet-50 rounded-lg">
-                      <Lightbulb className="h-5 w-5 text-violet-600" />
+                    <div className="p-2 bg-amber-50 rounded-lg">
+                      <Lightbulb className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold text-slate-800">Observaciones</CardTitle>
-                      <CardDescription>Conclusiones automáticas basadas en los datos del período</CardDescription>
+                      <CardTitle className="text-lg font-bold text-slate-800">
+                        Lectura del período
+                      </CardTitle>
+                      <CardDescription>
+                        Observaciones automáticas basadas en los datos.
+                      </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-6">
-                  <div className="space-y-3">
-                    {observaciones.map((obs, i) => (
-                      <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${
-                        obs.tipo === 'alerta' ? 'bg-amber-50 border-amber-200' :
-                        obs.tipo === 'positivo' ? 'bg-emerald-50 border-emerald-200' :
-                        'bg-blue-50 border-blue-200'
-                      }`}>
-                        {obs.tipo === 'alerta' && <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />}
-                        {obs.tipo === 'positivo' && <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />}
-                        {obs.tipo === 'info' && <TrendingUp className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />}
-                        <p className={`text-sm ${
-                          obs.tipo === 'alerta' ? 'text-amber-800' :
-                          obs.tipo === 'positivo' ? 'text-emerald-800' : 'text-blue-800'
-                        }`}>{obs.texto}</p>
+                <CardContent className="p-6 space-y-3">
+                  {insights.map((ins, i) => (
+                    <div key={i} className={`p-3 rounded-lg border-l-4 ${
+                      ins.tipo === 'positivo' ? 'bg-emerald-50 border-emerald-400' :
+                      ins.tipo === 'negativo' ? 'bg-rose-50 border-rose-400' :
+                      'bg-slate-50 border-slate-400'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        {ins.tipo === 'positivo' && <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
+                        {ins.tipo === 'negativo' && <AlertTriangle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />}
+                        {ins.tipo === 'neutro'   && <Minus            className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />}
+                        <div>
+                          <p className={`text-sm font-semibold ${
+                            ins.tipo === 'positivo' ? 'text-emerald-800' :
+                            ins.tipo === 'negativo' ? 'text-rose-800' : 'text-slate-800'
+                          }`}>{ins.titulo}</p>
+                          <p className={`text-xs mt-0.5 ${
+                            ins.tipo === 'positivo' ? 'text-emerald-700' :
+                            ins.tipo === 'negativo' ? 'text-rose-700' : 'text-slate-600'
+                          }`}>{ins.descripcion}</p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             )}
 
-            <div className="mt-8 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
-              <p className="text-sm text-blue-900 font-semibold mb-2">📖 Metodología del Reporte</p>
+            {/* ═══ METODOLOGÍA ═══ */}
+            <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+              <p className="text-sm text-blue-900 font-semibold mb-2">Metodología del Reporte</p>
               <ul className="text-xs text-blue-800 space-y-1 ml-4 list-disc">
-                <li><strong>Ingresos:</strong> Casos cuya <code>fechaInicio</code> cae dentro del período seleccionado.</li>
-                <li><strong>Cierres:</strong> Casos cuya <code>fechaCierre</code> cae dentro del período.</li>
-                <li><strong>Balance neto:</strong> Ingresos - Cierres. Positivo = acumulación de stock, negativo = reducción de cartera.</li>
-                <li><strong>Variación %:</strong> Comparación con el período inmediatamente anterior de igual duración.</li>
-                {!vistaPersonal && <li><strong>Composición:</strong> Distribución porcentual de ingresos por tipo, comparando período actual vs anterior.</li>}
-                {vistaPersonal && <li><strong>Promedio estudio:</strong> Total del estudio dividido entre abogados activos, para el mismo período.</li>}
+                <li><strong>Ingresos:</strong> expedientes con fecha de inicio dentro del período.</li>
+                <li><strong>Cierres:</strong> expedientes marcados como cerrados con fecha de cierre dentro del período.</li>
+                <li><strong>Crecimiento:</strong> ingresos menos cierres. Positivo = la cartera creció. Negativo = se achicó.</li>
+                <li><strong>Cartera activa:</strong> total de expedientes activos al día de hoy. En el gráfico, la línea muestra su evolución mes a mes.</li>
+                <li><strong>Alcance:</strong> {vistaActual === 'personal' && !esAdmin ? 'expedientes asignados al abogado' : 'todos los expedientes del estudio'}. Se excluyen expedientes traspasados.</li>
+                <li className="italic text-blue-700">
+                  <strong>Nota:</strong> el reporte muestra diferencias absolutas (+/-) en vez de porcentajes de un mes a otro para evitar comparaciones distorsionadas cuando algún mes no tiene actividad.
+                </li>
               </ul>
             </div>
 
@@ -521,49 +501,5 @@ const hastaISO = hoyDate.toISOString()
         </main>
       </div>
     </div>
-  )
-}
-
-// ============================================================================
-// KPI CARD — patrón unificado con cartera-fuero
-// ============================================================================
-// Card blanca neutra. Ícono dentro de un cuadradito con color tenue.
-// Número grande slate-900. Label slate-500.
-// La variación % mantiene color (verde/rojo) pero como detalle chico.
-// ============================================================================
-
-function KpiCard({
-  label, value, variacion, icon, iconBg, prefijo = '', comparativo
-}: {
-  label: string
-  value: number
-  variacion: number | null
-  icon: React.ReactNode
-  iconBg: string             // ej: "bg-blue-100"
-  prefijo?: string
-  comparativo?: string
-}) {
-  return (
-    <Card className="bg-white border border-slate-200">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 ${iconBg} rounded-lg shrink-0`}>{icon}</div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-500 font-medium">{label}</p>
-            <p className="text-2xl font-bold text-slate-900">{prefijo}{value}</p>
-            {variacion !== null && (
-              <p className={`text-[10px] font-medium mt-0.5 ${
-                variacion > 0 ? 'text-emerald-600' : variacion < 0 ? 'text-red-600' : 'text-slate-400'
-              }`}>
-                {variacion > 0 ? '↑' : variacion < 0 ? '↓' : '='} {Math.abs(variacion)}% vs período anterior
-              </p>
-            )}
-            {comparativo && (
-              <p className="text-[10px] text-slate-400 mt-0.5">{comparativo}</p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }

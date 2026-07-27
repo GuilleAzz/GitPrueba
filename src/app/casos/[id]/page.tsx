@@ -1,6 +1,5 @@
 // src/app/casos/[id]/page.tsx
 
-
 import { getUserSessionServer } from "@/auth/actions/auth-actions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,7 +24,9 @@ import { obtenerColaboradores, obtenerAbogadosDisponibles } from "./colaborador.
 import { getTareasDeCaso } from "src/lib/actions/tarea-actions"
 import { redirect, notFound } from "next/navigation"
 import { getLiquidacionesDeCaso } from "src/lib/actions/liquidacion-actions"
+import { getPlantillasOcaDeCaso } from "src/lib/actions/plantilla-oca-actions"
 import SeccionCalculosCaso from "./components/SeccionCalculosCaso"
+import SeccionPlantillasOca from "./components/SeccionPlantillasOca"
 import { NavegadorCarpetas } from "@/app/documentos/components/NavegadorCarpetas"
 
 // Helper para verificar roles
@@ -59,6 +60,10 @@ export default async function CasoDetailPage({ params }: { params: { id: string 
       },
       pagos: {  
         orderBy: { createdAt: "desc" }
+      },
+      // [HIST-MONTO] Traemos el historial de montos ordenado por fecha
+      historialMonto: {
+        orderBy: { fechaCambio: "desc" }
       }
     },
   })
@@ -69,7 +74,7 @@ export default async function CasoDetailPage({ params }: { params: { id: string 
   if (isAbogado(userRol)) {
     const esAbogadoTitular = caso.abogadoId === user.id
 
-    // TODO: Descomentar cuando se habilite el sistema de colaboradores
+    // TODO: sistema colaborador no se usara ni se implementara...
     // const colaboradorEnCaso = await prisma.colaboradorCaso.findFirst({
     //   where: { casoId: params.id, userId: user.id }
     // })
@@ -93,13 +98,27 @@ export default async function CasoDetailPage({ params }: { params: { id: string 
     orderBy: { createdAt: "asc" }
   })
 
-    const bitacorasCampos = await prisma.bitacora.findMany({
+const bitacorasCampos = await prisma.bitacora.findMany({
     where: {
       casoId: params.id,
-      accion: { in: ["JUZGADO_CHANGE", "UBICACION_CHANGE", "MONTO_CHANGE"] }
+      accion: { in: ["JUZGADO_CHANGE", "UBICACION_CHANGE", "MONTO_CHANGE", "ESTADO_RETROCESO"] }
     },
     orderBy: { createdAt: "desc" },
     take: 10
+  })
+
+  // [MAQ.EST] Traer TODOS los retrocesos del caso para mostrar el historial completo
+  const retrocesos = await prisma.bitacora.findMany({
+    where: {
+      casoId: params.id,
+      accion: "ESTADO_RETROCESO"
+    },
+    include: {
+      usuario: {
+        select: { nombre: true, apellido: true }
+      }
+    },
+    orderBy: { createdAt: "desc" }
   })
 
   // Helper para buscar el último cambio de un campo
@@ -112,6 +131,7 @@ export default async function CasoDetailPage({ params }: { params: { id: string 
 
   const tareasDeCaso = await getTareasDeCaso(params.id)
   const liquidacionesDelCaso = await getLiquidacionesDeCaso(params.id)
+  const plantillasOcaDelCaso = await getPlantillasOcaDeCaso(params.id)
 
   const getPriorityColor = (priority: string) => {
     if (priority === "HIGH") return "bg-red-100 text-red-700"
@@ -127,8 +147,8 @@ export default async function CasoDetailPage({ params }: { params: { id: string 
 
   // ===== PERMISOS POR ROL =====
 const puedeEditar = (isAbogado(userRol) || isAsistente(userRol)) && !caso.estaCerrado
-const puedeVerPagos = isAbogado(userRol)                // admin no ve pagos
-const puedeVerAuditoria = isAdmin(userRol)              // solo admin ve auditoría
+const puedeVerPagos = isAbogado(userRol)                // pagos no se implementara
+const puedeVerAuditoria = isAdmin(userRol)              // el admin ya no ve las cosas pero por ahora no toco esto
 const puedeVerMontoDisputa = isAbogado(userRol) 
 
   // Permiso para gestionar colaboradores
@@ -338,7 +358,7 @@ const puedeVerMontoDisputa = isAbogado(userRol)
                                 )}
                           </div>
 
-                          <div>
+                              <div>
                             <label className="text-sm font-semibold text-slate-600">Estado / Etapa Procesal</label>
                             <div className="mt-1">
                               <Badge className={getStateColor(caso.estado)}>
@@ -349,7 +369,63 @@ const puedeVerMontoDisputa = isAbogado(userRol)
                                   Expediente Cerrado
                                 </Badge>
                               )}
+                              {/* [MAQ.EST] Indicador si hubo retrocesos procesales */}
+                              {retrocesos.length > 0 && (
+                                <Badge className="ml-2 bg-amber-100 text-amber-800 border border-amber-300">
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  {retrocesos.length} {retrocesos.length === 1 ? 'retroceso registrado' : 'retrocesos registrados'}
+                                </Badge>
+                              )}
                             </div>
+
+                            {/* [MAQ.EST] Panel destacado con el detalle de los retrocesos */}
+                            {retrocesos.length > 0 && (
+                              <div className="mt-3 border-2 border-amber-300 bg-amber-50 rounded-lg overflow-hidden">
+                                <div className="bg-amber-200 px-3 py-2 flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-amber-900" />
+                                  <span className="text-sm font-bold text-amber-900 uppercase tracking-wide">
+                                    Historial de Retrocesos Procesales Excepcionales
+                                  </span>
+                                </div>
+                                <div className="p-3 space-y-3">
+                                  {retrocesos.map((r, idx) => (
+                                    <div 
+                                      key={r.id} 
+                                      className={`text-sm ${idx > 0 ? 'pt-3 border-t border-amber-200' : ''}`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <Badge className="bg-slate-200 text-slate-700 text-xs">
+                                            {r.estadoAnterior}
+                                          </Badge>
+                                          <span className="text-amber-700">→</span>
+                                          <Badge className="bg-amber-100 text-amber-800 text-xs">
+                                            {r.estadoNuevo}
+                                          </Badge>
+                                          {idx === 0 && (
+                                            <span className="text-xs text-amber-700 font-semibold">(más reciente)</span>
+                                          )}
+                                        </div>
+                                        <span className="text-xs text-slate-600 whitespace-nowrap">
+                                          {new Date(r.createdAt).toLocaleDateString('es-AR', { 
+                                            day: '2-digit', 
+                                            month: '2-digit', 
+                                            year: 'numeric' 
+                                          })}
+                                        </span>
+                                      </div>
+                                      <p className="text-slate-700 text-xs mt-1">
+                                        <span className="font-semibold text-amber-900">Motivo: </span>
+                                        {r.detalle?.replace("Motivo justificado: ", "") || "Sin motivo registrado"}
+                                      </p>
+                                      <p className="text-xs text-slate-500 mt-1">
+                                        Por: {r.usuario.nombre} {r.usuario.apellido}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -402,6 +478,33 @@ const puedeVerMontoDisputa = isAbogado(userRol)
                                     <AlertTriangle className="w-3 h-3" />
                                     Modificado — {ultimoCambio("MONTO_CHANGE")?.detalle?.replace("Motivo: ", "")}
                                   </p>
+                                )}
+
+                                {/* [HIST-MONTO] Acá mostramos los montos viejos en gris */}
+                                {(caso as any).historialMonto && (caso as any).historialMonto.length > 1 && (
+                                  <div className="mt-4 pt-3 border-t border-slate-100">
+                                    <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
+                                      Historial de montos anteriores
+                                    </p>
+                                    <div className="space-y-2">
+                                      {/* Usamos slice(1) para ignorar el monto actual y mostrar solo los viejos */}
+                                      {(caso as any).historialMonto.slice(1).map((h: any) => (
+                                        <div key={h.id} className="text-xs text-slate-500 flex flex-col gap-0.5 border-l-2 border-slate-200 pl-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium line-through text-slate-400">
+                                              ${Number(h.monto).toLocaleString('es-AR')}
+                                            </span>
+                                            <span className="text-slate-400 text-[10px]">
+                                              {new Date(h.fechaCambio).toLocaleDateString('es-AR')}
+                                            </span>
+                                          </div>
+                                          <p className="text-slate-400 italic">
+                                            {h.esInicial ? 'Carga inicial del expediente' : `Motivo: ${h.motivo}`}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -617,25 +720,6 @@ const puedeVerMontoDisputa = isAbogado(userRol)
                     </CardContent>
                   </Card>
 
-                  {/* Equipo del Caso: Abogado Titular + Colaboradores */}
-                  {/* <Card>
-                    <CardHeader className="border-b bg-slate-50/50">
-                      <CardTitle className="flex items-center gap-2">
-                        <Briefcase className="h-5 w-5 text-slate-600" />
-                        Equipo del Expediente
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <ColaboradoresPanel
-                        casoId={caso.id}
-                        colaboradores={colaboradores as any}
-                        abogadosDisponibles={abogadosDisponibles}
-                        puedeEditar={puedeEditarColaboradores}
-                        abogadoTitular={caso.abogado ? { nombre: caso.abogado.nombre, apellido: caso.abogado.apellido } : null}
-                      />
-                    </CardContent>
-                  </Card> */}
-
                 </div>
               </TabsContent>
 
@@ -686,6 +770,12 @@ const puedeVerMontoDisputa = isAbogado(userRol)
               <SeccionCalculosCaso
                 casoId={caso.id}
                 liquidaciones={liquidacionesDelCaso}
+                puedeEliminar={puedeEditar}
+              />
+              {/* Sección 3: Plantillas OCA generadas para el expediente */}
+              <SeccionPlantillasOca
+                casoId={caso.id}
+                plantillas={plantillasOcaDelCaso}
                 puedeEliminar={puedeEditar}
               />
             

@@ -9,7 +9,7 @@ interface Props {
 
 export default function AuthProvider({ children, ...rest }: Props) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false}>
       { children }
     </SessionProvider>
   );

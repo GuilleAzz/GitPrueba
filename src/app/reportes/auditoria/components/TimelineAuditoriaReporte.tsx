@@ -20,6 +20,7 @@ import {
   FileUp, FileX, FolderInput, FilePen,
   FolderPlus, FolderPen, FolderX,
   Calculator, Edit3, Trash2,
+  Mail, MailX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { EventoAuditoria, EventosPorDia } from "../page"
@@ -28,8 +29,7 @@ import type { EventoAuditoria, EventosPorDia } from "../page"
 // HELPERS
 // ============================================================================
 
-const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA"]
-
+const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA", "ESTADO_RETROCESO"]
 const ACCIONES_TAREA = [
   "TAREA_CREADA",
   "TAREA_ESTADO_CHANGE",
@@ -54,6 +54,11 @@ const ACCIONES_LIQUIDACION = [
   "LIQUIDACION_ELIMINADA",
 ]
 
+const ACCIONES_OCA = [
+  "OCA_CREADA",
+  "OCA_ELIMINADA",
+]
+
 const CATEGORIA_LABELS: Record<string, string> = {
   PRESENTACION_ESCRITO: "Presentación / Escrito",
   AUDIENCIA: "Audiencia",
@@ -76,16 +81,25 @@ const TIPO_LIQUIDACION_LABELS: Record<string, string> = {
   CAPITALIZACION: "Capitalización",
 }
 
+const TIPO_PLANTILLA_OCA_LABELS: Record<string, string> = {
+  RENUNCIA: "Renuncia",
+  AUSENCIA: "Ausencia / Intimación",
+  OTRO: "Otra comunicación",
+  ARCA: "ARCA (Art. 11)",
+}
+
 function esCritico(accion: string)        { return ACCIONES_CRITICAS.includes(accion) }
 function esDeTarea(accion: string)        { return ACCIONES_TAREA.includes(accion) }
 function esDeDocumento(accion: string)    { return ACCIONES_DOCUMENTO.includes(accion) }
 function esDeLiquidacion(accion: string)  { return ACCIONES_LIQUIDACION.includes(accion) }
+function esDeOca(accion: string)          { return ACCIONES_OCA.includes(accion) }
 
 function getLabel(accion: string, estadoNuevo?: string | null) {
   switch (accion) {
     // Caso
     case "CREATE":           return "Creación"
     case "ESTADO_CHANGE":    return "Cambio de etapa"
+    case "ESTADO_RETROCESO": return "Retroceso procesal"
     case "PRIORIDAD_CHANGE": return "Prioridad"
     case "JUZGADO_CHANGE":   return "Juzgado"
     case "UBICACION_CHANGE": return "Ubicación"
@@ -113,6 +127,8 @@ function getLabel(accion: string, estadoNuevo?: string | null) {
     case "LIQUIDACION_CREADA":    return "Cálculo guardado"
     case "LIQUIDACION_EDITADA":   return "Cálculo editado"
     case "LIQUIDACION_ELIMINADA": return "Cálculo eliminado"
+    case "OCA_CREADA":            return "Plantilla OCA generada"
+    case "OCA_ELIMINADA":         return "Plantilla OCA eliminada"
     default:                              return "Actualización"
   }
 }
@@ -122,6 +138,7 @@ function getIconoSmall(accion: string, estadoNuevo?: string | null) {
     // Caso
     case "CREATE":           return <FileText className="h-3 w-3" />
     case "ESTADO_CHANGE":    return <CheckCircle2 className="h-3 w-3" />
+    case "ESTADO_RETROCESO": return <RotateCcw className="h-3 w-3" /> 
     case "PRIORIDAD_CHANGE": return <AlertCircle className="h-3 w-3" />
     case "JUZGADO_CHANGE":   return <Scale className="h-3 w-3" />
     case "UBICACION_CHANGE": return <MapPin className="h-3 w-3" />
@@ -148,6 +165,8 @@ function getIconoSmall(accion: string, estadoNuevo?: string | null) {
     case "LIQUIDACION_CREADA":    return <Calculator className="h-3 w-3" />
     case "LIQUIDACION_EDITADA":   return <Edit3 className="h-3 w-3" />
     case "LIQUIDACION_ELIMINADA": return <Trash2 className="h-3 w-3" />
+    case "OCA_CREADA":            return <Mail className="h-3 w-3" />
+    case "OCA_ELIMINADA":         return <MailX className="h-3 w-3" />
     default:                              return <Clock className="h-3 w-3" />
   }
 }
@@ -175,6 +194,9 @@ function contarHitosDocumento(eventos: EventoAuditoria[]): number {
 }
 function contarHitosLiquidacion(eventos: EventoAuditoria[]): number {
   return eventos.filter(e => esDeLiquidacion(e.accion)).length
+}
+function contarHitosOca(eventos: EventoAuditoria[]): number {
+  return eventos.filter(e => esDeOca(e.accion)).length
 }
 
 function formatearMonto(monto: string): string {
@@ -253,6 +275,27 @@ function FilaEventoLiquidacion({ evento }: { evento: EventoAuditoria }) {
     </div>
   )
 }
+function FilaEventoOca({ evento }: { evento: EventoAuditoria }) {
+  const labelAccion = getLabel(evento.accion)
+  const oca = evento.plantillaOca
+  const tipoLabel = oca ? (TIPO_PLANTILLA_OCA_LABELS[oca.tipoPlantilla] ?? oca.tipoPlantilla) : "Plantilla OCA"
+  const nombre = oca?.archivoNombre
+
+  return (
+    <div className="flex items-start gap-2 py-1 text-xs">
+      <span className="text-rose-500 shrink-0 mt-0.5">
+        {getIconoSmall(evento.accion)}
+      </span>
+      <div className="flex-1 min-w-0">
+        <span className="text-slate-700 font-medium">{tipoLabel}</span>
+        {nombre && <span className="text-slate-400 italic ml-2 truncate">— {nombre}</span>}
+        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 bg-rose-50 text-rose-700 rounded font-bold uppercase tracking-wider border border-rose-200">
+          {labelAccion}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 // ============================================================================
 // TARJETA DE CASO — Modo fecha
@@ -268,8 +311,9 @@ function TarjetaCaso({
   const eventosTarea = eventos.filter(e => esDeTarea(e.accion))
   const eventosDoc = eventos.filter(e => esDeDocumento(e.accion))
   const eventosLiq = eventos.filter(e => esDeLiquidacion(e.accion))
+  const eventosOca = eventos.filter(e => esDeOca(e.accion))
   const eventosCaso = eventos.filter(e =>
-    !esDeTarea(e.accion) && !esDeDocumento(e.accion) && !esDeLiquidacion(e.accion)
+    !esDeTarea(e.accion) && !esDeDocumento(e.accion) && !esDeLiquidacion(e.accion) && !esDeOca(e.accion)
   )
   const autores = getAutoresUnicos(eventos)
   const tiposUnicos = Array.from(new Set(eventosCaso.map(e => e.accion)))
@@ -311,6 +355,12 @@ function TarjetaCaso({
               <span className="text-[10px] px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full font-bold flex items-center gap-1 border border-violet-200">
                 <Calculator className="w-3 h-3" />
                 {eventosLiq.length} cálculo{eventosLiq.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            {eventosOca.length > 0 && (
+              <span className="text-[10px] px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full font-bold flex items-center gap-1 border border-rose-200">
+                <Mail className="w-3 h-3" />
+                {eventosOca.length} plantilla{eventosOca.length !== 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -370,6 +420,16 @@ function TarjetaCaso({
               )}
             </div>
           )}
+          {eventosOca.length > 0 && (
+            <div className="mb-3 p-2 bg-rose-50/40 border border-rose-100 rounded-lg">
+              {eventosOca.slice(0, 3).map(e => <FilaEventoOca key={e.id} evento={e} />)}
+              {eventosOca.length > 3 && (
+                <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                  + {eventosOca.length - 3} plantilla{eventosOca.length - 3 !== 1 ? "s" : ""} más
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 flex-wrap">
             <User className="h-3 w-3 text-slate-400 shrink-0" />
@@ -414,6 +474,9 @@ function TarjetaCasoConDias({
   )
   const totalHitosLiq = eventosCasoAgrupados.reduce(
     (acc, d) => acc + contarHitosLiquidacion(d.eventos), 0
+  )
+const totalHitosOca = eventosCasoAgrupados.reduce(
+    (acc, d) => acc + contarHitosOca(d.eventos), 0
   )
 
   if (eventosCasoAgrupados.length === 0) {
@@ -462,6 +525,12 @@ function TarjetaCasoConDias({
                 <p className="text-xs text-violet-600">cálculo{totalHitosLiq !== 1 ? "s" : ""}</p>
               </div>
             )}
+            {totalHitosOca > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 text-center min-w-[70px]">
+                <p className="text-xl font-bold text-rose-700">{totalHitosOca}</p>
+                <p className="text-xs text-rose-600">plantilla{totalHitosOca !== 1 ? "s" : ""}</p>
+              </div>
+            )}
             {totalCriticos > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center min-w-[70px]">
                 <p className="text-xl font-bold text-amber-700">{totalCriticos}</p>
@@ -479,9 +548,10 @@ function TarjetaCasoConDias({
           const hitosTareaDia  = contarHitosTarea(dia.eventos)
           const hitosDocDia    = contarHitosDocumento(dia.eventos)
           const hitosLiqDia    = contarHitosLiquidacion(dia.eventos)
+          const hitosOcaDia    = contarHitosOca(dia.eventos)
           const tiposDia = Array.from(new Set(
             dia.eventos
-              .filter(e => !esDeTarea(e.accion) && !esDeDocumento(e.accion) && !esDeLiquidacion(e.accion))
+              .filter(e => !esDeTarea(e.accion) && !esDeDocumento(e.accion) && !esDeLiquidacion(e.accion) && !esDeOca(e.accion))
               .map(e => e.accion)
           ))
           const autoresDia = getAutoresUnicos(dia.eventos)
@@ -532,6 +602,12 @@ function TarjetaCasoConDias({
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full font-bold border border-violet-200">
                         <Calculator className="w-3 h-3" />
                         {hitosLiqDia} cálculo{hitosLiqDia !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {hitosOcaDia > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full font-bold border border-rose-200">
+                        <Mail className="w-3 h-3" />
+                        {hitosOcaDia} plantilla{hitosOcaDia !== 1 ? "s" : ""}
                       </span>
                     )}
                     {criticosDia.length > 0 && (

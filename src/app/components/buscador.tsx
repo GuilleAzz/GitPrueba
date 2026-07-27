@@ -28,7 +28,7 @@ export function Buscador({ placeholder }: { placeholder: string }) {
 
     // Limpieza del timeout si el usuario sigue tipeando
     return () => clearTimeout(timeoutId)
-  }, [term, pathname, replace, searchParams])
+  }, [term, pathname, replace])
 
   return (
     <div className="relative flex-1">

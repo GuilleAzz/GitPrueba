@@ -4,10 +4,44 @@ import { getUserSessionServer } from "@/auth/actions/auth-actions"
 import prisma from "src/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+// [DOC-VAL] Validación de documentos unificada
+import { validarDocumento, limpiarCuit, type TipoDocumento } from "src/lib/utils/documento"
 
 export type ClienteState = {
   message?: string | null
   error?: string | null
+}
+
+/**
+ * [DOC-VAL] Helper para validar el documento en las acciones.
+ * Devuelve mensaje de error si falla, null si OK.
+ *
+ * Nota: para CUIT/CUIL además normalizamos el valor (limpiando guiones)
+ * antes de validar y de guardar, para que en BD queden todos con el mismo
+ * formato canónico "20123456789" sin importar cómo lo tipearon.
+ */
+function validarYNormalizarDocumento(
+  tipo: string,
+  numero: string
+): { error: string | null; valorNormalizado: string } {
+  const tipoTyped = tipo as TipoDocumento
+  const resultado = validarDocumento(tipoTyped, numero)
+  
+  if (!resultado.valido) {
+    return { error: resultado.error, valorNormalizado: numero }
+  }
+
+  // Para CUIT/CUIL, normalizar a solo dígitos (sin guiones)
+  if (tipoTyped === "CUIT" || tipoTyped === "CUIL") {
+    return { error: null, valorNormalizado: limpiarCuit(numero) }
+  }
+
+  // Para DNI, sacar puntos si vinieran
+  if (tipoTyped === "DNI") {
+    return { error: null, valorNormalizado: numero.replace(/[.\s]/g, "") }
+  }
+
+  return { error: null, valorNormalizado: numero.trim() }
 }
 
 // ============================================================================
@@ -50,9 +84,17 @@ export async function crearClienteAction(
   if (!nombre || nombre.trim().length < 2) {
     return { error: "El nombre es obligatorio y debe tener al menos 2 caracteres" }
   }
-  if (!numeroDocumento || numeroDocumento.trim().length < 5) {
+
+  // [DOC-VAL] Validación completa del documento
+  if (!numeroDocumento) {
     return { error: "El número de documento es obligatorio" }
   }
+  const validacionDoc = validarYNormalizarDocumento(tipoDocumentoFinal, numeroDocumento)
+  if (validacionDoc.error) {
+    return { error: validacionDoc.error }
+  }
+  const numeroDocumentoNormalizado = validacionDoc.valorNormalizado
+
   if (tipoPersona === "FISICA" && (!apellido || apellido.trim().length < 2)) {
     return { error: "El apellido es obligatorio para personas físicas" }
   }
@@ -66,13 +108,18 @@ export async function crearClienteAction(
     if (!representanteDni || representanteDni.trim().length < 5) {
       return { error: "El DNI del representante es obligatorio para personas jurídicas" }
     }
+    // [DOC-VAL] Validar también el DNI del representante
+    const validacionRepDni = validarYNormalizarDocumento("DNI", representanteDni)
+    if (validacionRepDni.error) {
+      return { error: `DNI del representante: ${validacionRepDni.error}` }
+    }
   }
 
   const existeDocumento = await prisma.cliente.findUnique({
-    where: { numeroDocumento: numeroDocumento.trim() }
+    where: { numeroDocumento: numeroDocumentoNormalizado }
   })
   if (existeDocumento) {
-    return { error: `Ya existe un cliente con el documento ${numeroDocumento}` }
+    return { error: `Ya existe un cliente con el documento ${numeroDocumentoNormalizado}` }
   }
 
   if (!email || email.trim().length === 0) {
@@ -109,7 +156,7 @@ export async function crearClienteAction(
         apellido: apellido?.trim() || null,
         tipoPersona: tipoPersona as any,
         tipoDocumento: tipoDocumentoFinal as any,
-        numeroDocumento: numeroDocumento.trim(),
+        numeroDocumento: numeroDocumentoNormalizado, // [DOC-VAL] Guardar normalizado
         condicionIva: condicionIva as any,
         email: email?.trim().toLowerCase() || null,
         telefono: telefono?.trim() || null,
@@ -145,15 +192,7 @@ export async function crearClienteAction(
 // ============================================================================
 // ACTUALIZAR CLIENTE
 // ============================================================================
-// Visión A — Email único sincronizado:
-// Si el email del cliente cambia Y el cliente tiene portal vinculado, se
-// propaga al User.email en una transacción atómica:
-//   1. Cliente.email → email nuevo
-//   2. User.email del portal → email nuevo
-//   3. prisma.session.deleteMany() → invalida sesiones activas (relogin forzado)
-//   4. Tokens de activación sin usar → cancelados (link viejo deja de servir)
-//   5. Bitácora con trazabilidad
-// Si no tiene portal vinculado, solo se actualiza Cliente.email.
+// (sin cambios en la validación de documento porque no es editable)
 // ============================================================================
 export async function actualizarClienteAction(
   prevState: ClienteState,
@@ -168,7 +207,6 @@ export async function actualizarClienteAction(
   const clienteId = formData.get("id") as string
   if (!clienteId) return { error: "ID de cliente no válido" }
 
-  // Cargamos cliente con email actual + datos del portal (si tiene)
   const clienteExistente = await prisma.cliente.findUnique({
     where: { id: clienteId },
     select: {
@@ -187,7 +225,6 @@ export async function actualizarClienteAction(
 
   if (!clienteExistente) return { error: "Cliente no encontrado" }
 
-  // ===== OWNERSHIP =====
   const esAsistente = userRol === 'ASISTENTE'
   const esPropietario = clienteExistente.abogadoId === user.id
   const esCreador = clienteExistente.creadoPorId === user.id
@@ -196,14 +233,12 @@ export async function actualizarClienteAction(
     return { error: "No tenés permiso para editar este cliente" }
   }
 
-  // Campos no editables desde el form (vienen de la DB)
   const nombre = clienteExistente.nombre
   const apellido = clienteExistente.apellido
   const tipoPersona = clienteExistente.tipoPersona
   const tipoDocumento = clienteExistente.tipoDocumento
   const numeroDocumento = clienteExistente.numeroDocumento
 
-  // Campos editables del form
   const condicionIva = formData.get("condicionIva") as string
   const emailRaw = (formData.get("email") as string | null) || ""
   const email = emailRaw.trim().toLowerCase() || null
@@ -222,6 +257,12 @@ export async function actualizarClienteAction(
     if (!tipoSociedad || tipoSociedad.trim() === "") return { error: "El tipo de sociedad es obligatorio para personas jurídicas" }
     if (!representanteNombre || representanteNombre.trim().length < 2) return { error: "El nombre del representante legal es obligatorio para personas jurídicas" }
     if (!representanteDni || representanteDni.trim().length < 5) return { error: "El DNI del representante es obligatorio para personas jurídicas" }
+    
+    // [DOC-VAL] Validar DNI del representante también en update
+    const validacionRepDni = validarYNormalizarDocumento("DNI", representanteDni)
+    if (validacionRepDni.error) {
+      return { error: `DNI del representante: ${validacionRepDni.error}` }
+    }
   }
 
   if (!email) return { error: "El email es obligatorio" }
@@ -230,11 +271,9 @@ export async function actualizarClienteAction(
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!EMAIL_REGEX.test(email)) return { error: "El email no tiene un formato válido" }
 
-  // ===== ¿Cambió el email? =====
   const emailActual = clienteExistente.email?.toLowerCase() ?? null
   const emailCambio = email !== emailActual
 
-  // ===== Si cambió: validar unicidad contra Cliente Y User =====
   if (emailCambio) {
     const usadoPorOtroCliente = await prisma.cliente.findFirst({
       where: { email, id: { not: clienteId } },
@@ -245,7 +284,6 @@ export async function actualizarClienteAction(
     }
 
     if (clienteExistente.usuarioPortalId) {
-      // Tiene portal: el email puede coincidir con su propio User, pero no con otro
       const usadoPorOtroUser = await prisma.user.findFirst({
         where: { email, id: { not: clienteExistente.usuarioPortalId } },
         select: { id: true }
@@ -254,7 +292,6 @@ export async function actualizarClienteAction(
         return { error: "Ese email ya está usado por otra cuenta del sistema." }
       }
     } else {
-      // Sin portal: el email no debe existir en ningún User
       const usadoPorUser = await prisma.user.findFirst({
         where: { email },
         select: { id: true }
@@ -267,9 +304,6 @@ export async function actualizarClienteAction(
 
   try {
     if (emailCambio && clienteExistente.usuarioPortalId) {
-      // ═══════════════════════════════════════════════════════════════════
-      // Cambió el email Y tiene portal vinculado: propagación en transacción
-      // ═══════════════════════════════════════════════════════════════════
       await prisma.$transaction([
         prisma.cliente.update({
           where: { id: clienteId },
@@ -290,11 +324,9 @@ export async function actualizarClienteAction(
           where: { id: clienteExistente.usuarioPortalId },
           data: { email, emailVerified: new Date() }
         }),
-        // Si el cliente tenía sesión activa, lo desloguea (debe entrar con el email nuevo)
         prisma.session.deleteMany({
           where: { userId: clienteExistente.usuarioPortalId }
         }),
-        // Si tenía invitación pendiente sin activar, cancelar el token viejo
         prisma.accountActivationToken.updateMany({
           where: { userId: clienteExistente.usuarioPortalId, usedAt: null },
           data: { usedAt: new Date() }
@@ -310,7 +342,6 @@ export async function actualizarClienteAction(
         })
       ])
     } else {
-      // Sin portal vinculado o el email no cambió: update normal
       await prisma.cliente.update({
         where: { id: clienteId },
         data: {

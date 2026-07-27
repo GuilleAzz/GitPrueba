@@ -22,6 +22,7 @@ import {
   FileUp, FileX, FolderInput, FilePen,
   FolderPlus, FolderPen, FolderX,
   Calculator, Edit3, Trash2,
+  Mail, MailX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
@@ -56,7 +57,12 @@ const ACCIONES_LIQUIDACION = [
   "LIQUIDACION_ELIMINADA",
 ]
 
-const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA"]
+const ACCIONES_OCA = [
+  "OCA_CREADA",
+  "OCA_ELIMINADA",
+]
+
+const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA", "ESTADO_RETROCESO"]
 
 const CATEGORIA_LABELS: Record<string, string> = {
   PRESENTACION_ESCRITO: "Presentación / Escrito",
@@ -80,9 +86,17 @@ const TIPO_LIQUIDACION_LABELS: Record<string, string> = {
   CAPITALIZACION: "Capitalización",
 }
 
+const TIPO_PLANTILLA_OCA_LABELS: Record<string, string> = {
+  RENUNCIA: "Renuncia",
+  AUSENCIA: "Ausencia / Intimación",
+  OTRO: "Otra comunicación",
+  ARCA: "ARCA (Art. 11)",
+}
+
 function esDeTarea(accion: string)        { return ACCIONES_TAREA.includes(accion) }
 function esDeDocumento(accion: string)    { return ACCIONES_DOCUMENTO.includes(accion) }
 function esDeLiquidacion(accion: string)  { return ACCIONES_LIQUIDACION.includes(accion) }
+function esDeOca(accion: string)          { return ACCIONES_OCA.includes(accion) }
 function esCritico(accion: string)        { return ACCIONES_CRITICAS.includes(accion) }
 
 function formatearMonto(monto: string): string {
@@ -101,6 +115,7 @@ function getIcono(accion: string, estadoNuevo?: string | null) {
     // Caso
     case "CREATE":           return <FileText className="h-4 w-4 text-green-600" />
     case "ESTADO_CHANGE":    return <CheckCircle2 className="h-4 w-4 text-blue-600" />
+    case "ESTADO_RETROCESO": return <RotateCcw className="h-4 w-4 text-amber-600" />
     case "PRIORIDAD_CHANGE": return <AlertCircle className="h-4 w-4 text-orange-500" />
     case "JUZGADO_CHANGE":   return <Scale className="h-4 w-4 text-amber-600" />
     case "UBICACION_CHANGE": return <MapPin className="h-4 w-4 text-amber-600" />
@@ -127,6 +142,8 @@ function getIcono(accion: string, estadoNuevo?: string | null) {
     case "LIQUIDACION_CREADA":    return <Calculator className="h-4 w-4 text-violet-600" />
     case "LIQUIDACION_EDITADA":   return <Edit3 className="h-4 w-4 text-violet-600" />
     case "LIQUIDACION_ELIMINADA": return <Trash2 className="h-4 w-4 text-violet-600" />
+    case "OCA_CREADA":            return <Mail className="h-4 w-4 text-rose-600" />
+    case "OCA_ELIMINADA":         return <MailX className="h-4 w-4 text-rose-600" />
     default:                              return <Clock className="h-4 w-4 text-slate-500" />
   }
 }
@@ -136,6 +153,7 @@ function getEstilos(accion: string, critico: boolean) {
   if (esDeTarea(accion))       return "border border-indigo-200 bg-indigo-50/50 border-l-4 border-l-indigo-400"
   if (esDeDocumento(accion))   return "border border-blue-200 bg-blue-50/50 border-l-4 border-l-blue-400"
   if (esDeLiquidacion(accion)) return "border border-violet-200 bg-violet-50/50 border-l-4 border-l-violet-400"
+  if (esDeOca(accion))         return "border border-rose-200 bg-rose-50/50 border-l-4 border-l-rose-400"
   switch (accion) {
     case "CREATE":           return "border border-green-200 bg-green-50"
     case "ESTADO_CHANGE":    return "border border-blue-200 bg-blue-50"
@@ -149,6 +167,7 @@ function getLabel(accion: string, estadoNuevo?: string | null) {
     // Caso
     case "CREATE":           return "Creación de caso"
     case "ESTADO_CHANGE":    return "Cambio de etapa"
+    case "ESTADO_RETROCESO": return "Retroceso procesal excepcional"
     case "PRIORIDAD_CHANGE": return "Cambio de prioridad"
     case "JUZGADO_CHANGE":   return "Modificación de juzgado"
     case "UBICACION_CHANGE": return "Modificación de ubicación"
@@ -176,6 +195,8 @@ function getLabel(accion: string, estadoNuevo?: string | null) {
     case "LIQUIDACION_CREADA":    return "Cálculo guardado"
     case "LIQUIDACION_EDITADA":   return "Cálculo editado"
     case "LIQUIDACION_ELIMINADA": return "Cálculo eliminado"
+    case "OCA_CREADA":            return "Plantilla OCA generada"
+    case "OCA_ELIMINADA":         return "Plantilla OCA eliminada"
     default:                              return "Actualización"
   }
 }
@@ -186,8 +207,10 @@ const ACCIONES_DETALLE = [
   { value: "eventos",    label: "Solo eventos (tareas)",          grupo: "general" },
   { value: "documentos", label: "Solo documentos",                grupo: "general" },
   { value: "calculos",   label: "Solo cálculos",                  grupo: "general" },
+  { value: "ocas",       label: "Solo plantillas OCA",            grupo: "general" },
 
   { value: "ESTADO_CHANGE",     label: "Cambios de etapa",           grupo: "caso" },
+  { value: "ESTADO_RETROCESO",  label: "⚠ Retrocesos procesales",    grupo: "caso" },
   { value: "MONTO_CHANGE",      label: "Modificaciones de monto",    grupo: "caso" },
   { value: "JUZGADO_CHANGE",    label: "Modificaciones de juzgado",  grupo: "caso" },
   { value: "UBICACION_CHANGE",  label: "Modificaciones de ubicación",grupo: "caso" },
@@ -213,6 +236,8 @@ const ACCIONES_DETALLE = [
   { value: "LIQUIDACION_CREADA",    label: "Cálculos guardados",      grupo: "liquidacion" },
   { value: "LIQUIDACION_EDITADA",   label: "Cálculos editados",       grupo: "liquidacion" },
   { value: "LIQUIDACION_ELIMINADA", label: "Cálculos eliminados",     grupo: "liquidacion" },
+  { value: "OCA_CREADA",            label: "Plantillas OCA generadas",  grupo: "oca" },
+  { value: "OCA_ELIMINADA",         label: "Plantillas OCA eliminadas", grupo: "oca" },
 ]
 
 // ============================================================================
@@ -224,6 +249,7 @@ function EventoCard({ evento }: { evento: EventoAuditoria }) {
   const esTarea = esDeTarea(evento.accion)
   const esDoc = esDeDocumento(evento.accion)
   const esLiq = esDeLiquidacion(evento.accion)
+  const esOca = esDeOca(evento.accion)
 
   return (
     <div className={`p-4 rounded-lg ${getEstilos(evento.accion, critico)}`}>
@@ -248,11 +274,18 @@ function EventoCard({ evento }: { evento: EventoAuditoria }) {
               CÁLCULO
             </span>
           )}
+          {esOca && (
+            <span className="text-[10px] px-2 py-0.5 bg-rose-600 text-white rounded-full font-bold tracking-wider flex items-center gap-1">
+              <Mail className="w-3 h-3" />
+              PLANTILLA OCA
+            </span>
+          )}
           <span className={`text-xs font-semibold uppercase tracking-wide ${
             critico ? "text-amber-700" :
             esTarea ? "text-indigo-700" :
             esDoc   ? "text-blue-700"   :
             esLiq   ? "text-violet-700" :
+            esOca   ? "text-rose-700"   :
                       "text-slate-500"
           }`}>
             {getLabel(evento.accion, evento.estadoNuevo)}
@@ -335,14 +368,50 @@ function EventoCard({ evento }: { evento: EventoAuditoria }) {
           )}
         </div>
       )}
+      
+      {/* PLANTILLA OCA */}
+      {esOca && (
+        <div className="mb-2">
+          {evento.plantillaOca ? (
+            <>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p className="text-sm font-bold text-slate-800">
+                  {TIPO_PLANTILLA_OCA_LABELS[evento.plantillaOca.tipoPlantilla] ?? evento.plantillaOca.tipoPlantilla}
+                </p>
+                {evento.plantillaOca.eliminadoEn && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-medium">
+                    eliminado
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">
+                {evento.plantillaOca.archivoNombre}
+              </p>
+              {!evento.plantillaOca.eliminadoEn && evento.plantillaOca.archivoUrl && (
+                <a
+                  href={evento.plantillaOca.archivoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1 mt-1"
+                >
+                  <Mail className="w-3 h-3" />
+                  Descargar PDF
+                </a>
+              )}
+            </>
+          ) : (
+            <p className="text-sm font-bold text-slate-800">{evento.texto}</p>
+          )}
+        </div>
+      )}
 
       {/* CASO (lo de antes: solo texto de la bitácora) */}
-      {!esTarea && !esDoc && !esLiq && (
+      {!esTarea && !esDoc && !esLiq && !esOca && (
         <p className={`text-sm ${critico ? "text-amber-900" : "text-slate-700"}`}>{evento.texto}</p>
       )}
 
       {/* Transición de estados — solo para eventos de caso */}
-      {!esTarea && !esDoc && !esLiq && evento.estadoAnterior && evento.estadoNuevo && (
+      {!esTarea && !esDoc && !esLiq && !esOca && evento.estadoAnterior && evento.estadoNuevo && (
         <div className="flex items-center gap-2 text-xs text-slate-600 mt-2">
           <span className="px-2 py-0.5 bg-slate-200 rounded">{evento.estadoAnterior}</span>
           <span>→</span>
@@ -351,7 +420,7 @@ function EventoCard({ evento }: { evento: EventoAuditoria }) {
       )}
 
       {/* Texto descriptivo del evento de tarea/documento/cálculo (cuando hay y no es el título mismo) */}
-      {(esTarea || esDoc || esLiq) && evento.texto && (
+            {(esTarea || esDoc || esLiq || esOca) && evento.texto && (
         <p className="text-xs text-slate-600 mt-2 italic">{evento.texto}</p>
       )}
 
@@ -362,6 +431,7 @@ function EventoCard({ evento }: { evento: EventoAuditoria }) {
           esTarea ? "border-indigo-300 text-indigo-700" :
           esDoc   ? "border-blue-300 text-blue-700"     :
           esLiq   ? "border-violet-300 text-violet-700" :
+          esOca   ? "border-rose-300 text-rose-700"     :
                     "border-slate-300 text-slate-500"
         }`}>
           <span className="font-semibold not-italic">Observación:</span>{" "}
@@ -411,6 +481,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
     if (filtroAccionDetalle === "eventos")    return esDeTarea(e.accion)
     if (filtroAccionDetalle === "documentos") return esDeDocumento(e.accion)
     if (filtroAccionDetalle === "calculos")   return esDeLiquidacion(e.accion)
+      if (filtroAccionDetalle === "ocas")       return esDeOca(e.accion)
     return e.accion === filtroAccionDetalle
   })
 
@@ -418,6 +489,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
   const cantidadEventos     = eventos.filter(e => esDeTarea(e.accion)).length
   const cantidadDocumentos  = eventos.filter(e => esDeDocumento(e.accion)).length
   const cantidadCalculos    = eventos.filter(e => esDeLiquidacion(e.accion)).length
+  const cantidadOcas        = eventos.filter(e => esDeOca(e.accion)).length
 
   const volver = () => {
     const params = new URLSearchParams(searchParams.toString())
@@ -439,6 +511,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
   const accionesTarea         = ACCIONES_DETALLE.filter(a => a.grupo === "tarea")
   const accionesDocumento     = ACCIONES_DETALLE.filter(a => a.grupo === "documento")
   const accionesLiquidacion   = ACCIONES_DETALLE.filter(a => a.grupo === "liquidacion")
+  const accionesOca           = ACCIONES_DETALLE.filter(a => a.grupo === "oca")
 
   return (
     <div className="space-y-4">
@@ -492,6 +565,12 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
                 <p className="text-xs text-violet-600">cálculo{cantidadCalculos !== 1 ? "s" : ""}</p>
               </div>
             )}
+            {cantidadOcas > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 text-center min-w-[80px]">
+                <p className="text-2xl font-bold text-rose-700">{cantidadOcas}</p>
+                <p className="text-xs text-rose-600">plantilla{cantidadOcas !== 1 ? "s" : ""}</p>
+              </div>
+            )}
             {cantidadCriticos > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center min-w-[80px]">
                 <p className="text-2xl font-bold text-amber-700">{cantidadCriticos}</p>
@@ -528,6 +607,10 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
                 <SelectLabel className="text-[10px] uppercase tracking-wider text-slate-400">Cálculos</SelectLabel>
                 {accionesLiquidacion.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
               </SelectGroup>
+              <SelectGroup>
+                <SelectLabel className="text-[10px] uppercase tracking-wider text-slate-400">Plantillas OCA</SelectLabel>
+                {accionesOca.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+              </SelectGroup>
             </SelectContent>
           </Select>
           {filtroAccionDetalle !== "todos" && (
@@ -552,6 +635,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
               const esTarea = esDeTarea(evento.accion)
               const esDoc   = esDeDocumento(evento.accion)
               const esLiq   = esDeLiquidacion(evento.accion)
+              const esOca   = esDeOca(evento.accion)
               const critico = esCritico(evento.accion)
               return (
                 <div key={evento.id} className="relative">
@@ -560,6 +644,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
                     esTarea ? "border-indigo-400" :
                     esDoc   ? "border-blue-400"   :
                     esLiq   ? "border-violet-400" :
+                    esOca   ? "border-rose-400"   :
                               "border-slate-200"
                   }`}>
                     {getIcono(evento.accion, evento.estadoNuevo)}

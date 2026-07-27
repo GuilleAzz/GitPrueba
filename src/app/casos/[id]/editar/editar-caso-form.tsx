@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { ArrowLeft, Save, Star, AlertCircle, Scale, User, Lock, AlertTriangle, MapPin, Ban } from 'lucide-react'
+import { ArrowLeft, Save, Star, AlertCircle, Scale, User, Lock, AlertTriangle, MapPin, Ban, TrendingDown, TrendingUp } from 'lucide-react'
 import Link from "next/link"
 import { useFormState, useFormStatus } from "react-dom"
 import { useState, useEffect, FormEvent } from "react"
@@ -18,6 +18,12 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { useConfirmacion } from "src/components/confirmacion/ConfirmacionProvider"
 
+// [MAQ.EST] Importar la máquina de estados
+import {
+  ESTADOS_EXPEDIENTE,
+  getSiguientesEstadosPermitidos,
+  getTipoTransicion,
+} from "src/lib/domain/expediente-estados"
 
 // ========== TIPOS DE CASO ACTUALIZADOS ==========
 const TIPOS_CASO = [
@@ -30,18 +36,6 @@ const TIPOS_CASO = [
   { value: "OTRO", label: "Otro" }
 ]
 
-// ========== ESTADOS ACTIVOS (sin duplicados) ==========
-const ESTADOS_CASO_ACTIVOS = [
-  "Inicio / Demanda",
-  "Mediación / Previo",
-  "Prueba (Oficios/Pericias)",
-  "Alegatos / Conclusiones",
-  "Sentencia de 1ra Instancia",
-  "Apelación / 2da Instancia",
-  "Ejecución de Sentencia"
-  // REMOVIDOS: "Terminado", "Archivado" - Ahora se manejan con el flujo de cierre
-]
-
 function SubmitButton() {
   const { pending } = useFormStatus()
   return (
@@ -52,16 +46,12 @@ function SubmitButton() {
   )
 }
 
-// Función para extraer provincia y departamento del fuero existente
 function extraerProvinciaYDepartamento(fuero: string | null): { provincia: string; departamento: string } {
   if (!fuero) return { provincia: '', departamento: '' }
-  
   const partes = fuero.split(',').map(p => p.trim())
   if (partes.length >= 2) {
     return { departamento: partes[0], provincia: partes[1] }
   }
-  
-  // Si no tiene coma, intentar detectar si es una provincia conocida
   return { provincia: '', departamento: partes[0] || '' }
 }
 
@@ -70,11 +60,8 @@ export function EditarCasoForm({ caso, clientes }: { caso: any, clientes: any[] 
   // @ts-ignore
   const [state, dispatch] = useFormState(actualizarCasoAction, initialState)
 
-  // Control de estado para la etapa procesal
   const [etapaActual, setEtapaActual] = useState(caso.estado)
   const etapaOriginal = caso.estado
-
-  // Verificar si el caso está cerrado
   const casoCerrado = caso.estaCerrado === true
 
   // ========== ESTADOS PARA UBICACIÓN GEOGRÁFICA ==========
@@ -83,45 +70,56 @@ export function EditarCasoForm({ caso, clientes }: { caso: any, clientes: any[] 
   const [departamentoSeleccionado, setDepartamentoSeleccionado] = useState(deptoInicial)
   const [departamentosDisponibles, setDepartamentosDisponibles] = useState<{value: string; label: string}[]>([])
 
-    // Estados para modales de justificación
+  // Estados para modales de justificación
   const [modalJuzgado, setModalJuzgado] = useState(false)
   const [modalUbicacion, setModalUbicacion] = useState(false)
   const [modalMonto, setModalMonto] = useState(false)
 
+  // [MAQ.EST] Modal + motivo para RETROCESO de estado procesal
+  const [modalRetroceso, setModalRetroceso] = useState(false)
+  const [estadoPendienteRetroceso, setEstadoPendienteRetroceso] = useState<string>('')
+  const [motivoRetroceso, setMotivoRetroceso] = useState('')
+  const [errorRetroceso, setErrorRetroceso] = useState('')
+  const [motivoEstadoConfirmado, setMotivoEstadoConfirmado] = useState('')
+
+  // [HIST-MONTO] Estados para el cambio de monto
+  const [montoOriginal] = useState<string>(caso.montoDisputa?.toString() || '')
+  const [nuevaMonto, setNuevaMonto] = useState(caso.montoDisputa || '')
+  const [motivoMonto, setMotivoMonto] = useState('')
+  const [montoConfirmado, setMontoConfirmado] = useState(caso.montoDisputa || '')
+  const [errorMonto, setErrorMonto] = useState('')
+
   // Valores pendientes (lo que el usuario quiere cambiar)
   const [nuevoJuzgado, setNuevoJuzgado] = useState(caso.juzgado || '')
-  const [nuevaMonto, setNuevaMonto] = useState(caso.montoDisputa || '')
   const [motivoJuzgado, setMotivoJuzgado] = useState('')
   const [motivoUbicacion, setMotivoUbicacion] = useState('')
-  const [motivoMonto, setMotivoMonto] = useState('')
 
   // Valores confirmados (lo que se enviará al form)
   const [juzgadoConfirmado, setJuzgadoConfirmado] = useState(caso.juzgado || '')
-  const [montoConfirmado, setMontoConfirmado] = useState(caso.montoDisputa || '')
   const [ubicacionConfirmada, setUbicacionConfirmada] = useState({
     provincia: provInicial,
     ciudad: deptoInicial,
     fuero: caso.fuero || ''
   })
+  
   const { confirm: confirmar } = useConfirmacion()
   const [yaConfirmoCambioEtapa, setYaConfirmoCambioEtapa] = useState(false)
 
   const [errorJuzgado, setErrorJuzgado] = useState('')
   const [errorUbicacion, setErrorUbicacion] = useState('')
-  const [errorMonto, setErrorMonto] = useState('')
 
-  // Cargar provincias
+  // [MAQ.EST] Lista de estados posibles como destino desde el estado actual
+  const opcionesEstado = getSiguientesEstadosPermitidos(etapaOriginal)
+  const tipoTransicionActual = getTipoTransicion(etapaOriginal, etapaActual)
+
   const provincias: { value: string; label: string }[] = getProvinciasParaSelect()
 
-  // Cargar departamentos cuando cambia la provincia
   useEffect(() => {
     if (provinciaSeleccionada) {
       const deptos = getDepartamentosParaSelect(provinciaSeleccionada)
       setDepartamentosDisponibles(deptos)
       
-      // Si el departamento actual no está en la lista, limpiar
       if (departamentoSeleccionado && !deptos.find(d => d.value === departamentoSeleccionado)) {
-        // Mantener el valor original si viene del caso existente
         if (deptoInicial && provinciaSeleccionada === provInicial) {
           // No limpiar, mantener el valor original
         } else {
@@ -133,12 +131,6 @@ export function EditarCasoForm({ caso, clientes }: { caso: any, clientes: any[] 
     }
   }, [provinciaSeleccionada])
 
-  // Construir el valor del fuero
-  const fueroValue = departamentoSeleccionado && provinciaSeleccionada 
-    ? `${departamentoSeleccionado}, ${provinciaSeleccionada}`
-    : caso.fuero || ''
-
-  // Función auxiliar para formatear fecha
   const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return ""
     try {
@@ -148,7 +140,6 @@ export function EditarCasoForm({ caso, clientes }: { caso: any, clientes: any[] 
     }
   }
 
-  // Estado del checklist con datos iniciales
   const [requisitos, setRequisitos] = useState<{ description: string; dueDate: string; isCompleted?: boolean }[]>(
     caso.requirements ? caso.requirements.map((r: any) => ({
         description: r.description,
@@ -157,33 +148,44 @@ export function EditarCasoForm({ caso, clientes }: { caso: any, clientes: any[] 
     })) : []
   )
 
-  // Interceptor del envío para confirmar cambio de estado
-const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    // Si no hubo cambio de etapa, dejar pasar normal
+  const handleSelectEstado = (nuevoEstado: string) => {
+    const tipo = getTipoTransicion(etapaOriginal, nuevoEstado)
+    if (tipo === 'retroceso') {
+      setEstadoPendienteRetroceso(nuevoEstado)
+      setMotivoRetroceso('')
+      setErrorRetroceso('')
+      setModalRetroceso(true)
+    } else {
+      setEtapaActual(nuevoEstado)
+      setMotivoEstadoConfirmado('')
+    }
+  }
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     if (etapaActual === etapaOriginal) return
-    // Si ya confirmó en este intento, dejar pasar (segundo submit)
     if (yaConfirmoCambioEtapa) return
 
     e.preventDefault()
     const formEl = e.currentTarget
+    const esRetroceso = tipoTransicionActual === 'retroceso'
+    
     const ok = await confirmar({
-      titulo: 'Cambio de etapa procesal',
-      descripcion: `Estás moviendo el expediente de "${etapaOriginal}" a "${etapaActual}".\n\nEste cambio queda registrado en la bitácora del expediente y puede impactar en los reportes de seguimiento. ¿Confirmás que el expediente avanzó de fase?`,
-      textoConfirmar: 'Sí, avanzar etapa',
+      titulo: esRetroceso ? 'Retroceso procesal excepcional' : 'Cambio de etapa procesal',
+      descripcion: esRetroceso
+        ? `Estás RETROCEDIENDO el expediente de "${etapaOriginal}" a "${etapaActual}".\n\nMotivo registrado: ${motivoEstadoConfirmado}\n\nEste retroceso queda marcado como EXCEPCIONAL en la bitácora del expediente.`
+        : `Estás moviendo el expediente de "${etapaOriginal}" a "${etapaActual}".\n\nEste cambio queda registrado en la bitácora del expediente y puede impactar en los reportes de seguimiento. ¿Confirmás que el expediente avanzó de fase?`,
+      textoConfirmar: esRetroceso ? 'Sí, retroceder etapa' : 'Sí, avanzar etapa',
       textoCancelar: 'Cancelar',
       variante: 'warning',
     })
 
     if (ok) {
       setYaConfirmoCambioEtapa(true)
-      // Re-disparar el submit ahora que el flag está activo
       formEl.requestSubmit()
     }
   }
 
-  // Obtener el label del tipo actual (para casos con tipos legacy)
   const getTipoLabel = (tipoValue: string) => {
-    // Mapear tipos legacy a nuevos
     if (tipoValue === 'CIVIL' || tipoValue === 'COMERCIAL') {
       return 'Civil y Comercial (Legacy)'
     }
@@ -191,7 +193,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     return tipo?.label || tipoValue
   }
 
-  // Si el caso está cerrado, mostrar mensaje y no permitir edición
   if (casoCerrado) {
     return (
       <Card className="shadow-md border-red-200 max-w-5xl mx-auto">
@@ -265,7 +266,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
             </div>
           )}
 
-          {/* AVISO: Para cerrar el caso usar el botón específico */}
           <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
             <strong>💡 Tip:</strong> Para cerrar o archivar este expediente, use el botón 
             <span className="font-semibold"> "Cerrar Expediente"</span> en la vista del expediente. 
@@ -275,8 +275,9 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
           <form action={dispatch} onSubmit={handleSubmit} className="space-y-8">
             
             <input type="hidden" name="id" value={caso.id} />
+            <input type="hidden" name="motivo_estado" value={motivoEstadoConfirmado} />
 
-            {/* SECCIÓN 1: IDENTIFICACIÓN (CON CAMPOS BLOQUEADOS) */}
+            {/* SECCIÓN 1: IDENTIFICACIÓN */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">1</div>
@@ -284,8 +285,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
-                
-                {/* NÚMERO - BLOQUEADO */}
                 <div className="space-y-2">
                   <Label htmlFor="numero" className="flex items-center gap-2">
                     Nº Expediente <Lock className="w-3 h-3 text-slate-400"/>
@@ -299,7 +298,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   <input type="hidden" name="numero" value={caso.numero} />
                 </div>
 
-                {/* TIPO - BLOQUEADO (muestra el tipo actual) */}
                 <div className="space-y-2">
                   <Label htmlFor="tipo" className="flex items-center gap-2">
                     Materia / Tipo <Lock className="w-3 h-3 text-slate-400"/>
@@ -313,39 +311,62 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   <input type="hidden" name="tipo" value={caso.tipo} />
                 </div>
 
-                {/* ESTADO - EDITABLE (SOLO ESTADOS ACTIVOS) */}
                 <div className="space-y-2">
                   <Label htmlFor="estado" className="font-bold text-blue-700">Etapa Procesal (Modificable)</Label>
-                  <Select name="estado" value={etapaActual} onValueChange={setEtapaActual}>
+                  <Select name="estado" value={etapaActual} onValueChange={handleSelectEstado}>
                     <SelectTrigger className="bg-white border-blue-300 ring-offset-0 focus:ring-2 focus:ring-blue-500">
                         <SelectValue placeholder="Estado actual" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ESTADOS_CASO_ACTIVOS.map(estado => (
-                        <SelectItem key={estado} value={estado}>{estado}</SelectItem>
-                      ))}
-                      {/* Si el estado actual no está en la lista, mostrarlo igual */}
-                      {!ESTADOS_CASO_ACTIVOS.includes(etapaActual) && etapaActual && (
-                        <SelectItem key={etapaActual} value={etapaActual}>
-                          {etapaActual} (Estado anterior)
+                      <SelectItem value={etapaOriginal}>
+                        {etapaOriginal} (actual)
+                      </SelectItem>
+                      {opcionesEstado.filter(op => op.tipo === 'avance').map(op => (
+                        <SelectItem key={op.estado} value={op.estado}>
+                          <span className="flex items-center gap-2">
+                            <TrendingUp className="h-3 w-3 text-green-600" />
+                            {op.estado}
+                          </span>
                         </SelectItem>
-                      )}
+                      ))}
+                      {opcionesEstado.filter(op => op.tipo === 'retroceso').map(op => (
+                        <SelectItem key={op.estado} value={op.estado}>
+                          <span className="flex items-center gap-2">
+                            <TrendingDown className="h-3 w-3 text-amber-600" />
+                            {op.estado} <span className="text-xs text-amber-700">(retroceso)</span>
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500">
-                    Solo estados activos. Para cerrar, use el botón "Cerrar Expediente".
+                    Los avances son directos. Los retrocesos requieren motivo justificado.
                   </p>
                 </div>
               </div>
 
-              {/* ALERTA VISUAL DE CAMBIO DE ESTADO */}
-              {etapaActual !== etapaOriginal && (
-                <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800 text-sm animate-in fade-in slide-in-from-top-1">
-                    <AlertTriangle className="w-5 h-5 shrink-0" />
+              {etapaActual !== etapaOriginal && tipoTransicionActual === 'avance' && (
+                <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-800 text-sm animate-in fade-in slide-in-from-top-1">
+                    <TrendingUp className="w-5 h-5 shrink-0 text-blue-600" />
                     <div>
-                        <span className="font-bold block"> Cambio de Etapa Detectado</span>
-                        Estás moviendo el expediente de <strong>{etapaOriginal}</strong> a <strong>{etapaActual}</strong>. 
-                        Se te pedirá confirmación al guardar.
+                        <span className="font-bold block">Avance procesal</span>
+                        Moviendo el expediente de <strong>{etapaOriginal}</strong> a <strong>{etapaActual}</strong>. 
+                        Se solicitará confirmación al guardar.
+                    </div>
+                </div>
+              )}
+
+              {etapaActual !== etapaOriginal && tipoTransicionActual === 'retroceso' && (
+                <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-300 rounded-md text-amber-900 text-sm animate-in fade-in slide-in-from-top-1">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-700" />
+                    <div>
+                        <span className="font-bold block">Retroceso procesal excepcional</span>
+                        Retrocediendo el expediente de <strong>{etapaOriginal}</strong> a <strong>{etapaActual}</strong>.
+                        {motivoEstadoConfirmado && (
+                          <div className="mt-1">
+                            <strong>Motivo registrado:</strong> {motivoEstadoConfirmado}
+                          </div>
+                        )}
                     </div>
                 </div>
               )}
@@ -357,16 +378,11 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 
               <div className="space-y-2">
                 <Label htmlFor="descripcion">Descripción</Label>
-                <Textarea 
-                  id="descripcion" 
-                  name="descripcion" 
-                  defaultValue={caso.descripcion} 
-                  rows={4} 
-                />
+                <Textarea id="descripcion" name="descripcion" defaultValue={caso.descripcion} rows={4} />
               </div>
             </div>
 
-            {/* SECCIÓN 2: CLIENTE (BLOQUEADO) */}
+            {/* SECCIÓN 2: CLIENTE */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
                 <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">2</div>
@@ -394,7 +410,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   </Select>
                   
                   <input type="hidden" name="clienteId" value={caso.clienteId} />
-                  
                   <p className="text-xs text-slate-500 mt-1">
                     * El cliente no puede modificarse una vez creado el expediente.
                   </p>
@@ -405,7 +420,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
             {/* SECCIÓN 3: RADICACIÓN Y DATOS FINANCIEROS */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg">
   
-              {/* JUZGADO — con justificación */}
               <div className="space-y-2 md:col-span-2">
                 <Label className="flex items-center gap-2">
                   Juzgado / Secretaría <Lock className="w-3 h-3 text-slate-400" />
@@ -430,7 +444,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 <input type="hidden" name="motivo_juzgado" value={motivoJuzgado} />
               </div>
 
-              {/* UBICACIÓN — con justificación */}
               <div className="space-y-2 md:col-span-2">
                 <Label className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
@@ -458,7 +471,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 <input type="hidden" name="motivo_ubicacion" value={motivoUbicacion} />
               </div>
 
-              {/* MONTO — con justificación */}
+              {/* MONTO — CORREGIDO EL INPUT HIDDEN PARA QUE LLEGUE AL BACKEND */}
               <div className="space-y-2 md:col-span-2">
                 <Label className="flex items-center gap-2">
                   Monto en Disputa ($) <Lock className="w-3 h-3 text-slate-400" />
@@ -479,15 +492,15 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                     Modificar
                   </Button>
                 </div>
-                <input type="hidden" name="monto_disputa" value={montoConfirmado} />
+                {/* ⚠️ ESTO ERA LO QUE ESTABA MAL ("monto_disputa"), AHORA DICE "montoDisputa" */}
+                <input type="hidden" name="montoDisputa" value={montoConfirmado} />
                 <input type="hidden" name="motivo_monto" value={motivoMonto} />
               </div>
 
-              {/* Ubicación física sigue libre */}
               <div className="space-y-2 md:col-span-2">
                 <Label>Ubicación Física del Expediente</Label>
                 <Input 
-                  name="ubicacion_fisica" 
+                  name="ubicacionFisica" 
                   placeholder="Ej: Bibliorato A - Estante 2"
                   defaultValue={caso.ubicacionFisica || ""}
                 />
@@ -551,14 +564,63 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 
       </form>
 
+      {/* MODAL RETROCESO PROCESAL */}
+      <Dialog open={modalRetroceso} onOpenChange={setModalRetroceso}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Retroceso Procesal Excepcional
+            </DialogTitle>
+            <DialogDescription>
+              Estás intentando retroceder el expediente de <strong>{etapaOriginal}</strong> a <strong>{estadoPendienteRetroceso}</strong>.
+              Requieren motivo justificado y quedan registrados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Motivo del retroceso <span className="text-red-500">*</span></Label>
+              <Textarea
+                value={motivoRetroceso}
+                onChange={(e) => setMotivoRetroceso(e.target.value)}
+                placeholder="Ej: Se decretó nulidad de la prueba pericial..."
+                rows={4}
+              />
+              {errorRetroceso && (
+                <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {errorRetroceso}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalRetroceso(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (motivoRetroceso.trim().length < 10) {
+                  setErrorRetroceso('El motivo debe tener al menos 10 caracteres')
+                  return
+                }
+                setErrorRetroceso('')
+                setEtapaActual(estadoPendienteRetroceso)
+                setMotivoEstadoConfirmado(motivoRetroceso.trim())
+                setModalRetroceso(false)
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Confirmar retroceso
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL JUZGADO */}
       <Dialog open={modalJuzgado} onOpenChange={setModalJuzgado}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Modificar Juzgado</DialogTitle>
-            <DialogDescription>
-              Este cambio quedará registrado en la bitácora del expediente.
-            </DialogDescription>
+            <DialogDescription>Este cambio quedará registrado en la bitácora del expediente.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -577,7 +639,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 placeholder="Ej: Excusación del juez, cambio de sede..."
                 rows={3}
               />
-              {/* ⬇ ACÁ va el error inline */}
               {errorJuzgado && (
                 <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
                   <AlertCircle className="h-3 w-3" />
@@ -587,10 +648,8 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalJuzgado(false)}>
-              Cancelar
-            </Button>
-                        <Button 
+            <Button variant="outline" onClick={() => setModalJuzgado(false)}>Cancelar</Button>
+            <Button 
               onClick={() => {
                 if (!motivoJuzgado.trim()) {
                   setErrorJuzgado('El motivo es obligatorio')
@@ -613,9 +672,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Modificar Ubicación Geográfica</DialogTitle>
-            <DialogDescription>
-              Este cambio quedará registrado en la bitácora del expediente.
-            </DialogDescription>
+            <DialogDescription>Este cambio quedará registrado en la bitácora del expediente.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -659,34 +716,24 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 rows={3}
               />
               {errorUbicacion && (
-                <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errorUbicacion}
-                </p>
+                <p className="text-xs text-red-600 flex items-center gap-1 mt-1"><AlertCircle className="h-3 w-3" />{errorUbicacion}</p>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalUbicacion(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setModalUbicacion(false)}>Cancelar</Button>
             <Button
               onClick={() => {
-                if (!motivoUbicacion.trim()) {
-                  setErrorUbicacion('El motivo es obligatorio')
-                  return
-                }
-                if (!provinciaSeleccionada || !departamentoSeleccionado) {
-                  setErrorUbicacion('Seleccioná provincia y ciudad')
+                if (!motivoUbicacion.trim() || !provinciaSeleccionada || !departamentoSeleccionado) {
+                  setErrorUbicacion('Seleccioná provincia, ciudad y escribí un motivo')
                   return
                 }
                 setErrorUbicacion('')
                 const provinciaLabel = provincias.find(p => p.value === provinciaSeleccionada)?.label || provinciaSeleccionada
-                const nuevoFuero = `${departamentoSeleccionado}, ${provinciaLabel}`
                 setUbicacionConfirmada({
                   provincia: provinciaSeleccionada,
                   ciudad: departamentoSeleccionado,
-                  fuero: nuevoFuero
+                  fuero: `${departamentoSeleccionado}, ${provinciaLabel}`
                 })
                 setModalUbicacion(false)
               }}
@@ -698,7 +745,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL MONTO */}
+      {/* MODAL MONTO - CON LA LÓGICA DE CLAUDE ADAPTADA A TU SISTEMA */}
       <Dialog open={modalMonto} onOpenChange={setModalMonto}>
         <DialogContent>
           <DialogHeader>
@@ -718,6 +765,22 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 placeholder="0.00"
               />
             </div>
+
+            {/* CAJA ÁMBAR DE CLAUDE INYECTADA EN TU MODAL */}
+            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-900">
+                  <p className="font-semibold">Estás modificando el monto en disputa</p>
+                  <p className="mt-0.5 text-amber-700">
+                    {montoOriginal 
+                      ? `Valor anterior guardado: $${Number(montoOriginal).toLocaleString('es-AR')}` 
+                      : 'El expediente no tenía monto cargado hasta ahora.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Motivo del cambio <span className="text-red-500">*</span></Label>
               <Textarea
@@ -726,6 +789,12 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 placeholder="Ej: Actualización por inflación, pericia determinó nuevo valor..."
                 rows={3}
               />
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] text-slate-500">Mínimo 5 caracteres.</p>
+                <p className={`text-[10px] font-mono ${motivoMonto.trim().length < 5 ? 'text-red-500' : 'text-green-600'}`}>
+                  {motivoMonto.trim().length} / 5
+                </p>
+              </div>
               {errorMonto && (
                 <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
                   <AlertCircle className="h-3 w-3" />
@@ -735,13 +804,17 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalMonto(false)}>
+            <Button variant="outline" onClick={() => {
+              setModalMonto(false);
+              setNuevaMonto(montoConfirmado); // Si cancela, volvemos a lo de antes
+              setErrorMonto('');
+            }}>
               Cancelar
             </Button>
             <Button
               onClick={() => {
-                if (!motivoMonto.trim()) {
-                  setErrorMonto('El motivo es obligatorio')
+                if (motivoMonto.trim().length < 5) {
+                  setErrorMonto('El motivo es obligatorio y debe tener mínimo 5 caracteres')
                   return
                 }
                 setErrorMonto('')
@@ -755,6 +828,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
         </CardContent>
       </Card>
   )

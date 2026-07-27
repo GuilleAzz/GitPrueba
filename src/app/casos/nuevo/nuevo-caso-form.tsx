@@ -375,7 +375,7 @@ const submitDisabled = !clienteSeleccionado || (esAsistente
                 )}
               </div>
 
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Building className="h-4 w-4" />
                   Contraparte (Adversario)
@@ -387,7 +387,7 @@ const submitDisabled = !clienteSeleccionado || (esAsistente
                   onBlur={(e) => verificarConflicto(e.target.value)}
                   className="mt-2"
                 />
-              </div>
+              </div> */}
             </div>
 
             {mostrarAlertaConflicto && (
@@ -479,14 +479,14 @@ const submitDisabled = !clienteSeleccionado || (esAsistente
                 </div>
                 <div className="space-y-2">
                   <Label>Monto en Disputa ($)</Label>
-                  <Input name="monto_disputa" type="number" step="0.01" placeholder="0.00" />
+                  <Input name="montoDisputa" type="number" step="0.01" placeholder="0.00" />
                   <p className="text-xs text-slate-500">Para reportes de cartera</p>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Ubicación Física del Expediente</Label>
-                <Input name="ubicacion_fisica" placeholder="Ej: Bibliorato A - Estante 2 - Sector Laborales" />
+                <Input name="ubicacionFisica" placeholder="Ej: Bibliorato A - Estante 2 - Sector Laborales" />
               </div>
             </div>
           </div>

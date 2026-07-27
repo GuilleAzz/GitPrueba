@@ -29,7 +29,6 @@ import DialogoGuardarLiquidacion from "./components/DialogoGuardarLiquidacion";
 interface CalculoResult {
   indemnizacionBase: number;
   multas: number;
-  intereses: number;
   total: number;
   tipo?: TipoLiquidacion;
   detalle?: any;                          // snapshot completo del cálculo
@@ -41,18 +40,6 @@ const TABS = [
   { id: 'lrt',            name: 'Accidente - LRT',            icon: Truck,     component: LrtView,             tipo: 'LRT'            as TipoLiquidacion },
   { id: 'capitalizacion', name: 'Accidente - Capitalización', icon: Scale,     component: CapitalizacionView,  tipo: 'CAPITALIZACION' as TipoLiquidacion },
 ];
-
-export default function CalculadoraIndemnizacionesClient() {
-  const [activeTab, setActiveTab] = useState(TABS[0].id);
-  const [calculoResult, setCalculoResult] = useState<CalculoResult | null>(null);
-  const [dialogoAbierto, setDialogoAbierto] = useState(false);
-
-  const tabActiva = TABS.find(tab => tab.id === activeTab) ?? TABS[0];
-  const ActiveComponent = tabActiva.component;
-
-  const handleClearGlobal = () => {
-    setCalculoResult(null);
-  };
 
 const BotonGenerarPdfLiquidacion = dynamic(
   () => import("src/lib/pdf/liquidacion/BotonGenerarPdfLiquidacion")
@@ -69,6 +56,18 @@ const BotonGenerarPdfLiquidacion = dynamic(
     ),
   }
 );
+
+export default function CalculadoraIndemnizacionesClient() {
+  const [activeTab, setActiveTab] = useState(TABS[0].id);
+  const [calculoResult, setCalculoResult] = useState<CalculoResult | null>(null);
+  const [dialogoAbierto, setDialogoAbierto] = useState(false);
+
+  const tabActiva = TABS.find(tab => tab.id === activeTab) ?? TABS[0];
+  const ActiveComponent = tabActiva.component;
+
+  const handleClearGlobal = () => {
+    setCalculoResult(null);
+  };
 
   const handleAbrirGuardar = () => {
     if (!calculoResult) return;
@@ -158,18 +157,31 @@ const BotonGenerarPdfLiquidacion = dynamic(
 
                       {/* Desglose */}
                       <div className="space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-600">
-                          <span>Indemnización Base:</span>
-                          <span className="font-medium">${calculoResult.indemnizacionBase.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
-                          <span>Multas / Adicionales:</span>
-                          <span className="font-medium">${calculoResult.multas.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600 font-semibold">
-                          <span>Intereses Estimados:</span>
-                          <span>+ ${calculoResult.intereses.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
-                        </div>
+                        {calculoResult.tipo === 'CAPITALIZACION' ? (
+                          <>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Fórmula aplicada:</span>
+                              <span className="font-medium">
+                                {calculoResult.detalle?.comparativa?.formulaMayor ?? '—'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 pt-1 leading-relaxed">
+                              Se toma el capital más alto de las tres fórmulas comparadas. No son rubros
+                              que se sumen: son criterios jurisprudenciales alternativos.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Indemnización Base:</span>
+                              <span className="font-medium">${calculoResult.indemnizacionBase.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Multas / Adicionales:</span>
+                              <span className="font-medium">${calculoResult.multas.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Acciones */}

@@ -261,9 +261,8 @@ const handleCalculate = () => {
                                           'VERGARA';
 
     setCalculoResult({
-      indemnizacionBase: vuotto.capital,
+      indemnizacionBase: mayorCapital,
       multas: 0,
-      intereses: 0,
       total: mayorCapital,
       // ── snapshot para guardar y para PDF futuro ─────────────────────────────
       tipo: 'CAPITALIZACION',

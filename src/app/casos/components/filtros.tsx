@@ -2,23 +2,37 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 
-export function FiltrosCasos() {
+interface AbogadoOption {
+  id: string
+  nombre: string | null
+  apellido: string | null
+}
+
+interface FiltrosCasosProps {
+  abogadosDisponibles?: AbogadoOption[]
+  mostrarFiltroAbogado?: boolean
+}
+
+export function FiltrosCasos({
+  abogadosDisponibles = [],
+  mostrarFiltroAbogado = false,
+}: FiltrosCasosProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   const currentTipo = searchParams.get("tipo") || "todos"
   const currentEtapa = searchParams.get("etapa") || "todas"
+  const currentAbogado = searchParams.get("abogado") || "todos"
 
-  const handleFilterChange = (key: string, value: string) => {
+const handleFilterChange = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     if (value === "todos" || value === "todas") {
       params.delete(key)
     } else {
       params.set(key, value)
     }
-    // Actualiza la URL silenciosamente (el page.tsx lo detecta y filtra)
-    router.replace(`${pathname}?${params.toString()}`)
+    window.location.href = `${pathname}?${params.toString()}`
   }
 
   return (
@@ -53,6 +67,22 @@ export function FiltrosCasos() {
         <option value="Terminado">Terminado</option>
         <option value="Archivado">Archivado</option>
       </select>
+
+      {/* Selector de Abogado — solo visible para el rol ASISTENTE */}
+      {mostrarFiltroAbogado && (
+        <select
+          className="flex h-10 w-full sm:w-[200px] items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 cursor-pointer"
+          value={currentAbogado}
+          onChange={(e) => handleFilterChange("abogado", e.target.value)}
+        >
+          <option value="todos">Todos los abogados</option>
+          {abogadosDisponibles.map((a) => (
+            <option key={a.id} value={a.id}>
+              {`${a.apellido ?? ""} ${a.nombre ?? ""}`.trim() || "Sin nombre"}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   )
 }

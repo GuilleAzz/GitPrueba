@@ -48,6 +48,21 @@ const TIPOS_PERMITIDOS = [
 
 const TAMANIO_MAXIMO = 10 * 1024 * 1024 // 10MB
 
+// Repara nombres mal decodificados (UTF-8 leído como Latin-1): "ConfirmaciÃ³n" → "Confirmación".
+// Si el nombre ya está bien, lo devuelve intacto.
+function repararNombreArchivo(nombre: string): string {
+  // La firma del problema es la secuencia Ã seguida de otro byte alto.
+  if (!/Ã.|Â./.test(nombre)) return nombre
+  try {
+    // Reinterpretar los bytes Latin-1 como UTF-8
+    const reparado = Buffer.from(nombre, 'latin1').toString('utf8')
+    // Solo aceptar la reparación si no introdujo el carácter de reemplazo (�)
+    return reparado.includes('\uFFFD') ? nombre : reparado
+  } catch {
+    return nombre
+  }
+}
+
 // ============================================================================
 // SERVICE
 // ============================================================================
@@ -355,15 +370,16 @@ export class DocumentoService {
       nombreCarpeta = carpeta.nombre
     }
 
-    const storageKey = buildStorageKey(casoId, carpetaId || 'raiz', file.nombre)
-    const extension = file.nombre.split('.').pop()?.toLowerCase() || ''
+    const nombreArchivo = repararNombreArchivo(file.nombre)
+    const storageKey = buildStorageKey(casoId, carpetaId || 'raiz', nombreArchivo)
+    const extension = nombreArchivo.split('.').pop()?.toLowerCase() || ''
 
     const resultado = await storage.upload(file.buffer, storageKey, file.tipo)
 
     const documento = await prisma.documento.create({
       data: {
-        nombre: file.nombre,
-        nombreOriginal: file.nombre,
+        nombre: nombreArchivo,
+        nombreOriginal: nombreArchivo,
         storageKey: resultado.storageKey,
         url: resultado.url,
         tipo: file.tipo,
@@ -383,7 +399,7 @@ export class DocumentoService {
         usuarioId: subidoPorId,
         documentoId: documento.id,
         accion: 'DOCUMENTO_SUBIDO',
-        texto: `Documento subido: ${file.nombre}`,
+        texto: `Documento subido: ${nombreArchivo}`,
         detalle: [
           `Tamaño: ${this.formatearTamanio(file.tamanio)}`,
           nombreCarpeta ? `Carpeta: ${nombreCarpeta}` : 'Carpeta: raíz del expediente',

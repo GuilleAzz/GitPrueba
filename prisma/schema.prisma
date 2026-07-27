@@ -9,90 +9,92 @@ datasource db {
 }
 
 model User {
-  id                   String     @id @default(uuid())
-  email                String     @unique(map: "Usuario_email_key")
-  nombre               String?
-  apellido             String?
-  password             String?
-  rol                  UserRole   @default(ABOGADO)
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  emailVerified        DateTime?
-  image                String?
-  name                 String?
-  isActive             Boolean    @default(true)
-  creadoPor            String?
-  debeResetearPassword Boolean    @default(false)
-  ultimoAcceso         DateTime?
-  ultimoAccesoTareas   DateTime?
+  id                      String            @id @default(uuid())
+  email                   String            @unique(map: "Usuario_email_key")
+  nombre                  String?
+  apellido                String?
+  password                String?
+  rol                     UserRole          @default(ABOGADO)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  emailVerified           DateTime?
+  image                   String?
+  name                    String?
+  isActive                Boolean           @default(true)
+  creadoPor               String?
+  debeResetearPassword    Boolean           @default(false)
+  ultimoAcceso            DateTime?
+  ultimoAccesoTareas      DateTime?
   ultimoAccesoComentarios DateTime?
   colaboracionesAsignadas CasoColaborador[] @relation("AsignadorColaboracion")
 
-
-  accounts             Account[]
-  bitacoras            Bitacora[]
-  casos                Caso[]     @relation("AbogadoCasos")
-  clientes             Cliente[]  @relation("AbogadoClientes")
-  clienteVinculado     Cliente?   @relation("ClienteUsuarioPortal")
-  pagosValidados       Pago[]
-  sessions             Session[]
+  accounts         Account[]
+  bitacoras        Bitacora[]
+  casos            Caso[]     @relation("AbogadoCasos")
+  clientes         Cliente[]  @relation("AbogadoClientes")
+  clienteVinculado Cliente?   @relation("ClienteUsuarioPortal")
+  pagosValidados   Pago[]
+  sessions         Session[]
 
   alertasMailRecibidas TareaAlertaMail[]
 
-  passwordResetTokens     PasswordResetToken[]
-  activationToken         AccountActivationToken?
-  
-  tareasCreadas      Tarea[] @relation("TareasCreadas")
-  tareasAsignadas    Tarea[] @relation("TareasAsignadas")
-  tareasSupervisadas Tarea[] @relation("TareasSupervisadas")
-  documentos    Documento[]  @relation 
+  passwordResetTokens PasswordResetToken[]
+  activationToken     AccountActivationToken?
+
+  tareasCreadas      Tarea[]     @relation("TareasCreadas")
+  tareasAsignadas    Tarea[]     @relation("TareasAsignadas")
+  tareasSupervisadas Tarea[]     @relation("TareasSupervisadas")
+  documentos         Documento[] @relation
 
   colaboraciones CasoColaborador[]
 
-    // Comentarios y lecturas
+  // Comentarios y lecturas
   comentariosEscritos ComentarioTarea[] @relation("ComentariosAutor")
-  lecturasTarea      TareaLectura[]
+  lecturasTarea       TareaLectura[]
 
   liquidacionesCreadas    Liquidacion[] @relation("LiquidacionesCreadas")
   liquidacionesEliminadas Liquidacion[] @relation("LiquidacionesEliminadas")
+
+  plantillasOcaCreadas    PlantillaOca[] @relation("PlantillasOcaCreadas")
+  plantillasOcaEliminadas PlantillaOca[] @relation("PlantillasOcaEliminadas")
+  historialMontoRegistrado  HistorialMonto[] @relation("HistorialMontoRegistrado")
 
   @@map("usuario")
 }
 
 model Cliente {
-  id              String        @id @default(uuid())
-  nombre          String
-  apellido        String?
-  email           String?       @unique(map: "Cliente_email_key")
-  numeroDocumento String        @unique
-  tipoDocumento   TipoDocumento @default(DNI)
-  direccion       String?
-  telefono        String?       @unique(map: "Cliente_telefono_key")
-  estado          String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  abogadoId       String
-  activo          Boolean       @default(true)
-  condicionIva    CondicionIVA  @default(CONSUMIDOR_FINAL)
-  notasInternas   String?       @db.Text
-  tipoPersona     TipoPersona   @default(FISICA)
-  creadoPorId     String?
-  ultimoAccesoPortal  DateTime?
+  id                 String        @id @default(uuid())
+  nombre             String
+  apellido           String?
+  email              String?       @unique(map: "Cliente_email_key")
+  numeroDocumento    String        @unique
+  tipoDocumento      TipoDocumento @default(DNI)
+  direccion          String?
+  telefono           String?       @unique(map: "Cliente_telefono_key")
+  estado             String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  abogadoId          String
+  activo             Boolean       @default(true)
+  condicionIva       CondicionIVA  @default(CONSUMIDOR_FINAL)
+  notasInternas      String?       @db.Text
+  tipoPersona        TipoPersona   @default(FISICA)
+  creadoPorId        String?
+  ultimoAccesoPortal DateTime?
 
-  
-  usuarioPortalId String?       @unique
-  casos           Caso[]        @relation("ClienteCasos")
-  abogado         User          @relation("AbogadoClientes", fields: [abogadoId], references: [id])
-  usuarioPortal   User?         @relation("ClienteUsuarioPortal", fields: [usuarioPortalId], references: [id])
+  usuarioPortalId String? @unique
+  casos           Caso[]  @relation("ClienteCasos")
+  abogado         User    @relation("AbogadoClientes", fields: [abogadoId], references: [id])
+  usuarioPortal   User?   @relation("ClienteUsuarioPortal", fields: [usuarioPortalId], references: [id])
   tareas          Tarea[]
 
-    // Campos para Persona Jurídica
-  tipoSociedad          String?  // SA, SRL, SAS, COOPERATIVA, ASOCIACION_CIVIL
-  representanteNombre   String?
-  representanteDni      String?
+  // Campos para Persona Jurídica
+  tipoSociedad        String? // SA, SRL, SAS, COOPERATIVA, ASOCIACION_CIVIL
+  representanteNombre String?
+  representanteDni    String?
 
   // Campo para Persona Física
-  bienesEmbargables     String?  // SI, NO, NO_CORRESPONDE
+  bienesEmbargables String? // SI, NO, NO_CORRESPONDE
 
   @@index([usuarioPortalId])
   @@index([creadoPorId])
@@ -103,65 +105,92 @@ model Cliente {
 }
 
 model Caso {
-  id                String        @id @default(uuid())
-  numero            String        @unique(map: "Caso_numero_key")
-  titulo            String
-  descripcion       String        @db.Text
-  tipo              TipoCaso
-  estado            String
-  fechaUltimoCambioEstado DateTime      @default(now())
-  porcentajeAvance  Int           @default(0)
-  fechaInicio       DateTime
-  abogadoId         String
-  clienteId         String
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  isFavorite        Boolean       @default(false)
-  priority          Priority      @default(NORMAL)
-  fechaFin          DateTime?
-  contraparteDni    String?
-  contraparteNombre String?
-  fuero             String?
-  juzgado           String?
-  montoDisputa      Decimal?      @db.Decimal(15, 2)
-  ubicacionFisica   String?
-  cerradoPorId      String?
-  estaCerrado       Boolean       @default(false)
-  estadoAntesCierre String?
-  fechaCierre       DateTime?
-  montoFinal        Decimal?      @db.Decimal(15, 2)
-  motivoCierre      String?
-  observacionCierre String?       @db.Text
-  provincia    String?
-  ciudad       String?
-  esTraspasado    Boolean   @default(false)
-  fechaTraspaso   DateTime?
-  estudioDestino  String?           
-  motivoTraspaso  String?  @db.Text
+  id                      String    @id @default(uuid())
+  numero                  String    @unique(map: "Caso_numero_key")
+  titulo                  String
+  descripcion             String    @db.Text
+  tipo                    TipoCaso
+  estado                  String
+  fechaUltimoCambioEstado DateTime  @default(now())
+  porcentajeAvance        Int       @default(0)
+  fechaInicio             DateTime
+  abogadoId               String
+  clienteId               String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  isFavorite              Boolean   @default(false)
+  priority                Priority  @default(NORMAL)
+  fechaFin                DateTime?
+  contraparteDni          String?
+  contraparteNombre       String?
+  fuero                   String?
+  juzgado                 String?
+  montoDisputa            Decimal?  @db.Decimal(15, 2)
+  ubicacionFisica         String?
+  cerradoPorId            String?
+  estaCerrado             Boolean   @default(false)
+  estadoAntesCierre       String?
+  fechaCierre             DateTime?
+  montoFinal              Decimal?  @db.Decimal(15, 2)
+  motivoCierre            String?
+  observacionCierre       String?   @db.Text
+  provincia               String?
+  ciudad                  String?
+  esTraspasado            Boolean   @default(false)
+  fechaTraspaso           DateTime?
+  estudioDestino          String?
+  motivoTraspaso          String?   @db.Text
 
-    // ── Buffer de "recibido por reasignación" ──────────────────────────
-  recibidoEnReasignacion  Boolean   @default(false)
-  fechaReasignacion       DateTime?
+  // ── Buffer de "recibido por reasignación" ──────────────────────────
+  recibidoEnReasignacion Boolean   @default(false)
+  fechaReasignacion      DateTime?
 
-  bitacoras         Bitacora[]
-  abogado           User          @relation("AbogadoCasos", fields: [abogadoId], references: [id])
-  cliente           Cliente       @relation("ClienteCasos", fields: [clienteId], references: [id])
-  pagos             Pago[]
-  requirements      Requirement[]
-  tareas            Tarea[]
-  documentos        Documento[] 
-  contraparte       Contraparte?
-  carpetas          Carpeta[]
-  liquidaciones     Liquidacion[]
+  bitacoras     Bitacora[]
+  abogado       User              @relation("AbogadoCasos", fields: [abogadoId], references: [id])
+  cliente       Cliente           @relation("ClienteCasos", fields: [clienteId], references: [id])
+  pagos         Pago[]
+  requirements  Requirement[]
+  tareas        Tarea[]
+  documentos    Documento[]
+  contraparte   Contraparte?
+  carpetas      Carpeta[]
+  liquidaciones Liquidacion[]
+  plantillasOca PlantillaOca[]
+  colaboradores CasoColaborador[]
+  historialMonto  HistorialMonto[]
 
   @@index([abogadoId], map: "Caso_abogadoId_fkey")
   @@index([clienteId], map: "Caso_clienteId_fkey")
   @@index([tipo])
   @@index([estado])
   @@index([contraparteDni])
-  @@index([fechaUltimoCambioEstado]) 
-  colaboradores  CasoColaborador[]
+  @@index([fechaUltimoCambioEstado])
   @@map("caso")
+}
+
+model HistorialMonto {
+  id            String    @id @default(cuid())
+
+  monto         Decimal   @db.Decimal(15, 2)
+  motivo        String    @db.Text
+  esInicial     Boolean   @default(false)
+
+  casoId        String
+  caso          Caso      @relation(fields: [casoId], references: [id], onDelete: Cascade)
+
+  registradoPorId String
+  registradoPor   User    @relation("HistorialMontoRegistrado", fields: [registradoPorId], references: [id])
+
+  fechaCambio   DateTime  @default(now())
+
+  bitacoras     Bitacora[]
+
+  createdAt     DateTime  @default(now())
+
+  @@index([casoId])
+  @@index([fechaCambio])
+  @@index([registradoPorId])
+  @@map("historial_monto")
 }
 
 model Requirement {
@@ -194,9 +223,9 @@ model CasoColaborador {
 }
 
 model Contraparte {
-  id          String      @id @default(uuid())
-  casoId      String      @unique
-  caso        Caso        @relation(fields: [casoId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  casoId String @unique
+  caso   Caso   @relation(fields: [casoId], references: [id], onDelete: Cascade)
 
   tipoPersona TipoPersona @default(FISICA)
   nombre      String
@@ -208,8 +237,8 @@ model Contraparte {
   provincia   String?
   notas       String?     @db.Text
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("contraparte")
 }
@@ -218,24 +247,24 @@ model Liquidacion {
   id          String          @id @default(cuid())
   tipo        TipoLiquidacion
   montoTotal  Decimal         @db.Decimal(15, 2)
-  detalle     Json            // snapshot completo: parámetros + desglose
+  detalle     Json // snapshot completo: parámetros + desglose
   descripcion String?
 
-  casoId      String?
-  caso        Caso?           @relation(fields: [casoId], references: [id], onDelete: SetNull)
+  casoId String?
+  caso   Caso?   @relation(fields: [casoId], references: [id], onDelete: SetNull)
 
   creadoPorId String
-  creadoPor   User            @relation("LiquidacionesCreadas", fields: [creadoPorId], references: [id])
+  creadoPor   User   @relation("LiquidacionesCreadas", fields: [creadoPorId], references: [id])
 
-  bitacoras   Bitacora[]
+  bitacoras Bitacora[]
 
   // Soft delete: nunca se borra físicamente
-  eliminadoEn      DateTime?
-  eliminadoPorId   String?
-  eliminadoPor     User?      @relation("LiquidacionesEliminadas", fields: [eliminadoPorId], references: [id])
+  eliminadoEn    DateTime?
+  eliminadoPorId String?
+  eliminadoPor   User?     @relation("LiquidacionesEliminadas", fields: [eliminadoPorId], references: [id])
 
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([casoId])
   @@index([tipo])
@@ -270,30 +299,30 @@ model Tarea {
 
   motivoCierreVencida String?   @db.Text
   vencidaCerradaEn    DateTime?
-  vencidaCerradaPorId String? 
+  vencidaCerradaPorId String?
 
   // Relaciones de actores
-  casoId           String?
-  cliente          Cliente?       @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  creadorId        String
-  responsableId    String
-  supervisorId     String?
+  casoId        String?
+  cliente       Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  creadorId     String
+  responsableId String
+  supervisorId  String?
 
-  caso             Caso?          @relation(fields: [casoId], references: [id], onDelete: SetNull)
-  creador          User           @relation("TareasCreadas", fields: [creadorId], references: [id])
-  responsable      User           @relation("TareasAsignadas", fields: [responsableId], references: [id])
-  supervisor       User?          @relation("TareasSupervisadas", fields: [supervisorId], references: [id])
-  
-  bitacoras        Bitacora[]
+  caso        Caso? @relation(fields: [casoId], references: [id], onDelete: SetNull)
+  creador     User  @relation("TareasCreadas", fields: [creadorId], references: [id])
+  responsable User  @relation("TareasAsignadas", fields: [responsableId], references: [id])
+  supervisor  User? @relation("TareasSupervisadas", fields: [supervisorId], references: [id])
+
+  bitacoras Bitacora[]
 
   // Comentarios e historial de lectura
-  comentarios      ComentarioTarea[]
-  lecturas         TareaLectura[]
-   alertasMail      TareaAlertaMail[]
-  motivoCierreAdmin   MotivoCierreAdmin?
+  comentarios       ComentarioTarea[]
+  lecturas          TareaLectura[]
+  alertasMail       TareaAlertaMail[]
+  motivoCierreAdmin MotivoCierreAdmin?
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([casoId])
   @@index([clienteId])
@@ -309,7 +338,7 @@ model TareaAlertaMail {
   id        String   @id @default(cuid())
   tareaId   String
   userId    String
-  umbral    Int      // 20, 10 o 5 (días hábiles)
+  umbral    Int // 20, 10 o 5 (días hábiles)
   enviadoAt DateTime @default(now())
 
   tarea Tarea @relation(fields: [tareaId], references: [id], onDelete: Cascade)
@@ -323,11 +352,10 @@ model TareaAlertaMail {
   @@map("tarea_alerta_mail")
 }
 
-
 enum MotivoCierreAdmin {
-  TRASPASO_ABOGADO     // El responsable/supervisor del evento se fue del estudio
-  TRASPASO_EXPEDIENTE  // El caso del que dependía se traspasó a otro estudio
-  TRASPASO_CLIENTE 
+  TRASPASO_ABOGADO // El responsable/supervisor del evento se fue del estudio
+  TRASPASO_EXPEDIENTE // El caso del que dependía se traspasó a otro estudio
+  TRASPASO_CLIENTE
 }
 
 // ============================================================================
@@ -336,20 +364,20 @@ enum MotivoCierreAdmin {
 // Soporta cita opcional (responder a otro comentario) sin hilos anidados.
 // ============================================================================
 model ComentarioTarea {
-  id           String   @id @default(uuid())
-  texto        String   @db.Text
-  tareaId      String
-  autorId      String
+  id      String @id @default(uuid())
+  texto   String @db.Text
+  tareaId String
+  autorId String
 
   // Cita opcional a otro comentario de la misma tarea
   citaComentarioId    String?
   citaComentario      ComentarioTarea?  @relation("CitaRelation", fields: [citaComentarioId], references: [id], onDelete: SetNull)
   citadoEnComentarios ComentarioTarea[] @relation("CitaRelation")
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  tarea        Tarea    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
-  autor        User     @relation("ComentariosAutor", fields: [autorId], references: [id])
+  tarea Tarea @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  autor User  @relation("ComentariosAutor", fields: [autorId], references: [id])
 
   @@index([tareaId])
   @@index([autorId])
@@ -363,9 +391,9 @@ model ComentarioTarea {
 // Al abrir el Drawer de una tarea, se upsertea el registro con now().
 // ============================================================================
 model TareaLectura {
-  userId        String
-  tareaId       String
-  ultimaLectura DateTime @default(now())
+  userId                       String
+  tareaId                      String
+  ultimaLectura                DateTime @default(now())
   ultimoUmbralVencimientoVisto Int?
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -389,15 +417,20 @@ model Bitacora {
   estadoAnterior String?
   estadoNuevo    String?
 
+  documentoId   String?
+  liquidacionId String?
 
-  documentoId    String?
-  liquidacionId  String?
+  plantillaOcaId String?
+  plantillaOca   PlantillaOca? @relation(fields: [plantillaOcaId], references: [id], onDelete: SetNull)
 
-  caso           Caso?         @relation(fields: [casoId],         references: [id], onDelete: Cascade)
-  usuario        User          @relation(fields: [usuarioId],      references: [id])
-  tarea          Tarea?        @relation(fields: [tareaId],        references: [id], onDelete: Cascade)
-  documento      Documento?    @relation(fields: [documentoId],    references: [id], onDelete: SetNull)
-  liquidacion    Liquidacion?  @relation(fields: [liquidacionId],  references: [id], onDelete: SetNull)
+  caso        Caso?        @relation(fields: [casoId], references: [id], onDelete: Cascade)
+  usuario     User         @relation(fields: [usuarioId], references: [id])
+  tarea       Tarea?       @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  documento   Documento?   @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  liquidacion Liquidacion? @relation(fields: [liquidacionId], references: [id], onDelete: SetNull)
+
+  historialMontoId String?
+  historialMonto   HistorialMonto? @relation(fields: [historialMontoId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId])
   @@index([tareaId])
@@ -410,31 +443,31 @@ model Bitacora {
 }
 
 model Documento {
-  id            String    @id @default(uuid())
-  nombre        String                         
-  nombreOriginal String                         
-  storageKey    String                         
-  url           String?                        
-  tipo          String                          
-  extension     String                          
-  tamanio       Int                             
-  descripcion   String?   @db.Text
-  esInterno     Boolean   @default(false)       
-  
+  id             String  @id @default(uuid())
+  nombre         String
+  nombreOriginal String
+  storageKey     String
+  url            String?
+  tipo           String
+  extension      String
+  tamanio        Int
+  descripcion    String? @db.Text
+  esInterno      Boolean @default(false)
+
   // Relaciones
-  casoId        String
-  caso          Caso      @relation(fields: [casoId], references: [id], onDelete: Cascade)
+  casoId String
+  caso   Caso   @relation(fields: [casoId], references: [id], onDelete: Cascade)
 
-  carpetaId     String?
-  carpetaRef    Carpeta?  @relation(fields: [carpetaId], references: [id], onDelete: Cascade)
-  
-  subidoPorId   String
-  subidoPor     User      @relation(fields: [subidoPorId], references: [id])
+  carpetaId  String?
+  carpetaRef Carpeta? @relation(fields: [carpetaId], references: [id], onDelete: Cascade)
 
-  bitacoras     Bitacora[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  subidoPorId String
+  subidoPor   User   @relation(fields: [subidoPorId], references: [id])
+
+  bitacoras Bitacora[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([casoId])
   @@index([subidoPorId])
@@ -443,24 +476,23 @@ model Documento {
 }
 
 model Carpeta {
-  id              String      @id @default(uuid())
-  nombre          String
-  casoId          String
-  carpetaPadreId  String?     
+  id             String  @id @default(uuid())
+  nombre         String
+  casoId         String
+  carpetaPadreId String?
 
-  caso            Caso        @relation(fields: [casoId], references: [id], onDelete: Cascade)
-  carpetaPadre    Carpeta?    @relation("CarpetasAnidadas", fields: [carpetaPadreId], references: [id], onDelete: Cascade)
-  subcarpetas     Carpeta[]   @relation("CarpetasAnidadas")
-  documentos      Documento[]
+  caso         Caso        @relation(fields: [casoId], references: [id], onDelete: Cascade)
+  carpetaPadre Carpeta?    @relation("CarpetasAnidadas", fields: [carpetaPadreId], references: [id], onDelete: Cascade)
+  subcarpetas  Carpeta[]   @relation("CarpetasAnidadas")
+  documentos   Documento[]
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([casoId])
   @@index([carpetaPadreId])
   @@map("carpeta")
 }
-
 
 model Pago {
   id              String    @id @default(cuid())
@@ -512,14 +544,14 @@ model Account {
 // ============================================================================
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  token     String   @unique          // valor opaco que viaja en la URL
+  id        String    @id @default(cuid())
+  token     String    @unique // valor opaco que viaja en la URL
   userId    String
-  expiresAt DateTime                  // 1 hora desde la creación
-  usedAt    DateTime?                 // null hasta que se consume; al consumirse, queda fijado
-  createdAt DateTime @default(now())
+  expiresAt DateTime // 1 hora desde la creación
+  usedAt    DateTime? // null hasta que se consume; al consumirse, queda fijado
+  createdAt DateTime  @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -527,14 +559,14 @@ model PasswordResetToken {
 }
 
 model AccountActivationToken {
-  id        String   @id @default(cuid())
-  token     String   @unique          // valor opaco que viaja en la URL
-  userId    String   @unique          // un usuario tiene UN solo token de activación activo
-  expiresAt DateTime                  // 48 horas desde la creación
-  usedAt    DateTime?                 // se setea cuando el usuario completa la activación
-  createdAt DateTime @default(now())
+  id        String    @id @default(cuid())
+  token     String    @unique // valor opaco que viaja en la URL
+  userId    String    @unique // un usuario tiene UN solo token de activación activo
+  expiresAt DateTime // 48 horas desde la creación
+  usedAt    DateTime? // se setea cuando el usuario completa la activación
+  createdAt DateTime  @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@map("account_activation_token")
@@ -643,4 +675,53 @@ enum EstadoTarea {
   BLOQUEADA
   COMPLETADA
   VENCIDA
+}
+
+enum TipoPlantillaOca {
+  RENUNCIA // "comunicacion-renuncia.pdf"
+  AUSENCIA // "comunicacion-ausencia-23789.pdf"
+  OTRO // "otro-tipo-comunicacion-laboral.pdf"
+  ARCA // "comunicacion-ARCA-articulo-11.pdf"
+}
+
+model PlantillaOca {
+  id            String           @id @default(cuid())
+  tipoPlantilla TipoPlantillaOca
+
+  // Snapshot de todos los datos ingresados en el form (para consulta/reportes)
+  datos Json
+
+  // Archivo generado (persistido en Vercel Blob)
+  archivoUrl        String // URL pública del PDF
+  archivoStorageKey String // pathname del blob (para borrarlo después)
+  archivoNombre     String // Nombre amigable (ej: "OCA-Renuncia-2026-07-12.pdf")
+  archivoTamanio    Int // En bytes
+
+  // Descripción opcional del abogado
+  descripcion String?
+
+  // Relación con el expediente (obligatoria: la OCA siempre pertenece a un caso)
+  casoId String
+  caso   Caso   @relation(fields: [casoId], references: [id], onDelete: Cascade)
+
+  // Autoría
+  creadoPorId String
+  creadoPor   User   @relation("PlantillasOcaCreadas", fields: [creadoPorId], references: [id])
+
+  // Bitácora (auditoría)
+  bitacoras Bitacora[]
+
+  // Soft delete (patrón Liquidacion)
+  eliminadoEn    DateTime?
+  eliminadoPorId String?
+  eliminadoPor   User?     @relation("PlantillasOcaEliminadas", fields: [eliminadoPorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([casoId])
+  @@index([tipoPlantilla])
+  @@index([creadoPorId])
+  @@index([eliminadoEn])
+  @@map("plantilla_oca")
 }

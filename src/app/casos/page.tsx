@@ -1,5 +1,6 @@
 import { getUserSessionServer } from "@/auth/actions/auth-actions"
 import { CasoService } from "@/lib/aplication/services/caso.service"
+import { UserService } from "@/lib/aplication/services/user.service"
 import Link from "next/link"
 import { Sidebar } from "@/app/components/sidebar"
 import { Header } from "@/app/components/header"
@@ -13,6 +14,21 @@ import { redirect, notFound } from "next/navigation"
 import { getMotivoCierreLabel, getMotivoCierreColors } from "src/lib/constants/motivos-cierre"
 
 const casoService = new CasoService()
+const userService = new UserService()
+
+// Traduce el enum de tipo a etiqueta legible
+const getTipoLabel = (tipo: string) => {
+  const labels: Record<string, string> = {
+    LABORAL: "Laboral",
+    CIVIL_COMERCIAL: "Civil y Comercial",
+    FAMILIA: "Familia",
+    PENAL: "Penal",
+    SUCESIONES: "Sucesiones",
+    CONTENCIOSO_ADMINISTRATIVO: "Contencioso Administrativo",
+    OTRO: "Otro",
+  }
+  return labels[tipo] ?? tipo
+}
 
 // Helper para color de estados
 const getBadgeColor = (estado: string) => {
@@ -30,7 +46,7 @@ const isAsistente = (rol: string) => rol?.toUpperCase() === 'ASISTENTE'
 export default async function CasosPage({
   searchParams,
 }: {
-  searchParams?: { buscar?: string; tipo?: string; etapa?: string; recientes?: string }
+  searchParams?: { buscar?: string; tipo?: string; etapa?: string; recientes?: string; abogado?: string }
 }) {
   const user = await getUserSessionServer()
 
@@ -73,12 +89,22 @@ export default async function CasosPage({
 
   const filtroRecientes = searchParams?.recientes === "1"
 
+  // Filtro por abogado — solo para ASISTENTE, que ve expedientes de todo el estudio
+  const filtroAbogado = isAsistente(userRol) ? (searchParams?.abogado || "") : ""
+  const abogadosDisponibles = isAsistente(userRol)
+    ? await userService.obtenerAbogadosActivos()
+    : []
+
   // Contar casos recibidos por reasignación ANTES de aplicar el filtro
 const totalRecientes = casos.filter(c => c.recibidoEnReasignacion).length
 
 // Aplicar filtro si está activo
 if (filtroRecientes) {
   casos = casos.filter(c => c.recibidoEnReasignacion)
+}
+
+if (filtroAbogado) {
+  casos = casos.filter(c => c.abogadoId === filtroAbogado)
 }
 
   if (terminoBusqueda) {
@@ -180,7 +206,10 @@ if (terminoEtapa) {
             <CardContent>
               <div className="flex gap-4">
                 <Buscador placeholder="Buscar por número de expediente o carátula..." />
-                <FiltrosCasos />
+                <FiltrosCasos
+                  abogadosDisponibles={abogadosDisponibles}
+                  mostrarFiltroAbogado={isAsistente(userRol)}
+                />
               </div>
             </CardContent>
           </Card>
@@ -250,7 +279,7 @@ if (terminoEtapa) {
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-slate-400 font-normal">{caso.tipo}</span>
+                        <span className="text-xs text-slate-400 font-normal">{getTipoLabel(caso.tipo)}</span>
                       </td>
                       
                       <td className="p-4 text-sm text-slate-600">

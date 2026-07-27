@@ -186,7 +186,7 @@ export default function LrtView({ setCalculoResult, handleClear }: CalculatorVie
 
     setResultado(res);
     setCalculoResult({
-      indemnizacionBase: res.indemnizacionBase,
+      indemnizacionBase: res.indemnizacionBase + res.art11,
       multas:            res.adicional26773,
       intereses:         0,
       total:             res.totalFinal,

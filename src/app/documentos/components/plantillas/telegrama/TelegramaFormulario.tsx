@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FileText, ArrowLeft, Printer, Loader2, AlertCircle, Landmark, Info } from 'lucide-react'
+import { FileText, ArrowLeft, Printer, Loader2, AlertCircle, Landmark, Info, Save, CheckCircle2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription, AlertTitle } from "src/components/ui/alert"
 import { obtenerDatosCasoParaTelegrama, generarTelegramaPdfAction, DatosTelegrama } from './telegramaAction'
 import { LIMITES_CUERPO, contarPalabras } from './limites-telegrama'
+import { validarCuit } from "src/lib/utils/cuit"
 
 interface TelegramaFormularioProps {
   casoId: string
@@ -49,6 +50,10 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
   const [error, setError] = useState('')
   // Avisa si el DNI del remitente se derivó de un CUIT (hay que chequear).
   const [dniDerivadoDeCuit, setDniDerivadoDeCuit] = useState(false)
+  // [OCA] Feedback cuando la plantilla se guarda en el expediente
+  const [mensajeExito, setMensajeExito] = useState('')
+  // [OCA] Guardamos el PDF generado para poder imprimirlo después con un click real del usuario
+  const [pdfGenerado, setPdfGenerado] = useState<string | null>(null)
 
   const esArca = tipoTelegrama === 'arca'
 
@@ -119,10 +124,25 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
     cargarDatos()
   }, [casoId, tipoTelegrama, esArca])
 
-  const handleGenerarEImprimir = async (e: React.FormEvent) => {
+  // [OCA] Validación client-side del CUIT del destinatario (Opción B: bloquear si inválido)
+  // ARCA no requiere destinatario, entonces siempre pasa la validación.
+  const cuitDestRequerido = !esArca
+  const cuitDestValido = esArca
+    ? true
+    : (formData.destinatarioCuit ? validarCuit(formData.destinatarioCuit) : false)
+  
+  const motivoBloqueoCuit = cuitDestRequerido && !cuitDestValido
+    ? (!formData.destinatarioCuit || formData.destinatarioCuit.length === 0
+      ? "Falta el CUIT del destinatario"
+      : "El CUIT del destinatario no es válido (verificá el dígito verificador)")
+    : null
+
+const handleGuardarEnExpediente = async (e: React.FormEvent) => {
     e.preventDefault()
     setProcesandoPdf(true)
     setError('')
+    setMensajeExito('')
+    setPdfGenerado(null)
 
     try {
       const res = await generarTelegramaPdfAction(formData)
@@ -131,16 +151,29 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
         return
       }
 
-      const bytes = Uint8Array.from(atob(res.pdfBase64), c => c.charCodeAt(0))
-      const blob = new Blob([bytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const ventanaImpresion = window.open(url)
-      if (ventanaImpresion) ventanaImpresion.focus()
+      setPdfGenerado(res.pdfBase64)
+
+      if ((res as any).warning) {
+        setMensajeExito(`El PDF se generó pero NO se pudo guardar en el expediente. Imprimilo ahora para no perderlo. ${(res as any).warning}`)
+      } else {
+        setMensajeExito('La plantilla quedó guardada en el expediente, en el tab Documentación.')
+      }
     } catch (err) {
       setError('Error al compilar el documento final.')
     } finally {
       setProcesandoPdf(false)
     }
+  }
+
+  // Abre el PDF en pestaña nueva. Se dispara con un click directo del usuario,
+  // así el navegador no lo bloquea como popup.
+  const abrirParaImprimir = () => {
+    if (!pdfGenerado) return
+    const bytes = Uint8Array.from(atob(pdfGenerado), c => c.charCodeAt(0))
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const ventana = window.open(url)
+    if (ventana) ventana.focus()
   }
 
   if (loading) {
@@ -153,7 +186,7 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
   }
 
   return (
-    <form onSubmit={handleGenerarEImprimir} className="max-w-4xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+    <form onSubmit={handleGuardarEnExpediente} className="max-w-4xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
 
       <div className="flex items-center justify-between border-b pb-4">
         <Button type="button" variant="ghost" size="sm" onClick={onVolver} className="gap-1 text-slate-500">
@@ -171,12 +204,43 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+      {mensajeExito && (
+        <Alert className="border-green-200 bg-green-50">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-800">Plantilla guardada</AlertTitle>
+          <AlertDescription className="text-green-700">
+            <p>{mensajeExito}</p>
+            {pdfGenerado && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={abrirParaImprimir}
+                className="mt-3 gap-2 bg-white"
+              >
+                <Printer className="h-4 w-4" /> Abrir para imprimir
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* [OCA] Warning si el CUIT del destinatario no es válido */}
+      {motivoBloqueoCuit && !esArca && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>CUIT del destinatario inválido</AlertTitle>
+          <AlertDescription>
+            {motivoBloqueoCuit}. No se puede generar el telegrama hasta que el CUIT sea válido.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Advertencia general sobre tipo de dato (DNI vs CUIT) */}
       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
         <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
         <p className="text-xs text-amber-800 leading-relaxed">
-          <span className="font-semibold">Verificá los datos antes de imprimir.</span> El sistema precarga la
+          <span className="font-semibold">Verificá los datos antes de guardar.</span> El sistema precarga la
           información del expediente, pero el telegrama puede pedir un tipo de dato distinto al cargado
           (por ejemplo, pide <strong>DNI</strong> y en el expediente cargaste un <strong>CUIT</strong>).
           Revisá que cada campo tenga el dato correcto.
@@ -319,6 +383,11 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
             </p>
             <span className={seePasa ? "text-red-600 font-semibold" : "text-slate-500"}>
               {cantidadActual} / {limite.max} {unidadLabel}
+              {limite.unidad === 'palabras' && (
+                <span className="text-slate-400 font-normal ml-1.5">
+                  · {formData.cuerpoTexto.length} caracteres
+                </span>
+              )}
             </span>
           </div>
 
@@ -336,13 +405,13 @@ export function TelegramaFormulario({ casoId, tipoTelegrama, onVolver }: Telegra
 
       <Button
         type="submit"
-        disabled={procesandoPdf || seePasa}
+        disabled={procesandoPdf || seePasa || !!motivoBloqueoCuit}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base font-medium shadow-md gap-2 disabled:opacity-50"
       >
         {procesandoPdf ? (
-          <><Loader2 className="h-5 w-5 animate-spin" /> Procesando formulario oficial...</>
+          <><Loader2 className="h-5 w-5 animate-spin" /> Generando y guardando...</>
         ) : (
-          <><Printer className="h-5 w-5" /> Rellenar e Imprimir Telegrama</>
+          <><Save className="h-5 w-5" /> Guardar en el expediente</>
         )}
       </Button>
 

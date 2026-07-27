@@ -136,6 +136,28 @@ export class UserService {
     return usuario
   }
 
+  /**
+   * Abogados activos del estudio. Se usa para poblar los selectores de filtrado
+   * por abogado (listado de expedientes, documentos, reportes).
+   */
+  async obtenerAbogadosActivos() {
+    return await prisma.user.findMany({
+      where: {
+        rol: 'ABOGADO',
+        isActive: true
+      },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true
+      },
+      orderBy: [
+        { apellido: 'asc' },
+        { nombre: 'asc' }
+      ]
+    })
+  }
+
   async actualizarUsuario(id: string, data: ActualizarUsuarioData) {
     const existente = await prisma.user.findUnique({
       where: { id }

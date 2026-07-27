@@ -11,14 +11,28 @@ import { ArrowLeft, Save, User, Building2, FileText, Phone, Mail, MapPin, Hash, 
 import Link from "next/link"
 import { useFormState, useFormStatus } from "react-dom"
 import { useState, useEffect } from "react"
+import { validarDocumento, getPlaceholderDocumento, getHintDocumento, type TipoDocumento } from "src/lib/utils/documento"
 
-function SubmitButton() {
+function SubmitButton({ deshabilitado, motivoDeshabilitado }: { deshabilitado?: boolean; motivoDeshabilitado?: string }) {
   const { pending } = useFormStatus()
   return (
-    <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700 text-white">
-      <Save className="h-4 w-4 mr-2" />
-      {pending ? "Creando..." : "Crear Cliente"}
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button 
+        type="submit" 
+        disabled={pending || deshabilitado} 
+        className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+        title={deshabilitado ? motivoDeshabilitado : undefined}
+      >
+        <Save className="h-4 w-4 mr-2" />
+        {pending ? "Creando..." : "Crear Cliente"}
+      </Button>
+      {deshabilitado && motivoDeshabilitado && (
+        <p className="text-xs text-amber-600 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          {motivoDeshabilitado}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -86,28 +100,34 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
       setValidaciones(prev => ({ ...prev, documento: { valido: true, mensaje: "" }}))
       return
     }
-    let esValido = false
-    let mensaje = ""
-    switch(documentoTipo) {
-      case "DNI":
-        esValido = /^\d{7,8}$/.test(numeroDocumento.replace(/\./g, ''))
-        mensaje = esValido ? "" : "DNI debe tener 7-8 dígitos"
-        break
-      case "CUIT":
-      case "CUIL":
-        esValido = /^\d{2}-?\d{8}-?\d{1}$/.test(numeroDocumento)
-        mensaje = esValido ? "" : "Formato: 20-12345678-9 (11 dígitos)"
-        break
-      case "PASAPORTE":
-        esValido = /^[A-Z0-9]{6,9}$/i.test(numeroDocumento)
-        mensaje = esValido ? "" : "6-9 caracteres alfanuméricos"
-        break
-      default:
-        esValido = numeroDocumento.length >= 5
-        mensaje = esValido ? "" : "Mínimo 5 caracteres"
-    }
-    setValidaciones(prev => ({ ...prev, documento: { valido: esValido, mensaje }}))
+    const resultado = validarDocumento(documentoTipo as TipoDocumento, numeroDocumento)
+    setValidaciones(prev => ({ 
+      ...prev, 
+      documento: { 
+        valido: resultado.valido, 
+        mensaje: resultado.error || "" 
+      }
+    }))
   }, [numeroDocumento, documentoTipo])
+
+   const formPuedeEnviarse = 
+    validaciones.email.valido && email.length > 0 &&
+    validaciones.telefono.valido && telefono.length > 0 &&
+    validaciones.direccion.valido && direccion.length > 0 &&
+    validaciones.documento.valido && numeroDocumento.length > 0
+
+  // Mensaje explicativo de por qué no se puede enviar
+  const motivoBloqueo = !formPuedeEnviarse ? (() => {
+    if (!validaciones.documento.valido && numeroDocumento.length > 0) return "Verificá el número de documento"
+    if (numeroDocumento.length === 0) return "Falta el número de documento"
+    if (!validaciones.email.valido && email.length > 0) return "Verificá el email"
+    if (email.length === 0) return "Falta el email"
+    if (!validaciones.telefono.valido && telefono.length > 0) return "Verificá el teléfono"
+    if (telefono.length === 0) return "Falta el teléfono"
+    if (!validaciones.direccion.valido && direccion.length > 0) return "Verificá la dirección"
+    if (direccion.length === 0) return "Falta la dirección"
+    return "Revisá los campos marcados"
+  })() : undefined
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -334,16 +354,16 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
                         <SelectItem value="CUIT">CUIT - Clave Única Tributaria</SelectItem>
                         <SelectItem value="CUIL">CUIL - Clave Única Laboral</SelectItem>
                         <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
-                        <SelectItem value="OTRO">Otro Documento</SelectItem>
+                        <SelectItem value="OTRO">Otro (LC, LE, CI extranjera)</SelectItem>
                       </SelectContent>
                     </Select>
                     {tipoPersona === 'JURIDICA' && <p className="text-xs text-slate-500">Las personas jurídicas se identifican siempre con CUIT</p>}
                   </div>
-                  <div className="space-y-2">
+<div className="space-y-2">
                     <Label className="flex items-center gap-2"><Hash className="h-4 w-4" />Número de Documento<span className="text-red-500">*</span></Label>
                     <Input
                       name="numeroDocumento"
-                      placeholder={documentoTipo === 'DNI' ? "Ej: 12345678" : documentoTipo === 'CUIT' || documentoTipo === 'CUIL' ? "Ej: 20-12345678-9" : documentoTipo === 'PASAPORTE' ? "Ej: AAA123456" : "Ingrese el número"}
+                      placeholder={getPlaceholderDocumento(documentoTipo as TipoDocumento)}
                       value={numeroDocumento}
                       onChange={(e) => {
                         let valor = e.target.value
@@ -356,7 +376,7 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
                             valor = valor.replace(/[^0-9-]/g, '').slice(0, 13) // 11 dígitos + 2 guiones
                             break
                           case 'PASAPORTE':
-                            valor = valor.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 9)
+                            valor = valor.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 15)
                             break
                           default:
                             valor = valor.slice(0, 20)
@@ -367,6 +387,17 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
                       required
                       className={`border-2 ${numeroDocumento.length > 0 ? validaciones.documento.valido ? 'border-green-500' : 'border-red-500' : 'border-slate-300'}`}
                     />
+                    {/* [DOC-VAL] Mensaje de error si el documento no es válido */}
+                    {numeroDocumento.length > 0 && !validaciones.documento.valido && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validaciones.documento.mensaje}
+                      </p>
+                    )}
+                    {/* [DOC-VAL] Hint del formato esperado */}
+                    <p className="text-xs text-slate-500">
+                      {getHintDocumento(documentoTipo as TipoDocumento)}
+                    </p>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <Label className="flex items-center gap-2">Condición frente al IVA<span className="text-red-500">*</span></Label>
@@ -490,7 +521,10 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
                       <ArrowLeft className="h-4 w-4" /> Cancelar
                     </Button>
                   </Link>
-                  <SubmitButton />
+                  <SubmitButton
+                    deshabilitado={!formPuedeEnviarse}
+                    motivoDeshabilitado={motivoBloqueo}
+                  />
                 </div>
               </div>
             </form>

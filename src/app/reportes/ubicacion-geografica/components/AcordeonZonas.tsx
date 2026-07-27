@@ -55,15 +55,8 @@ interface ZonaGeografica {
   ciudad: string
   provincia: string
   coordenadas: { lat: number; lng: number } | null
-  distanciaKm: number
-  clasificacionDistancia: {
-    tipo: 'local' | 'cercano' | 'medio' | 'lejano'
-    label: string
-    color: string
-  }
   juzgados: JuzgadoAgrupado[]
   totalCasos: number
-  casosUrgentes: number
   casos: CasoUbicacion[]
 }
 
@@ -80,17 +73,8 @@ function ZonaItem({ zona, vistaGeneral, seleccionada, onToggle }: {
 }) {
   const [expandida, setExpandida] = useState(false)
 
-  const getIconoDistancia = () => {
-    if (zona.clasificacionDistancia.tipo === 'local') {
-      return <Building2 className="h-5 w-5 text-green-600" />
-    }
-    return <Car className="h-5 w-5 text-orange-600" />
-  }
-
   return (
-    <Card className={`border-slate-200 shadow-sm overflow-hidden transition-all ${
-      zona.casosUrgentes > 0 ? 'border-l-4 border-l-amber-500' : ''
-    }`}>
+    <Card className="border-slate-200 shadow-sm overflow-hidden transition-all">
       <Collapsible open={expandida} onOpenChange={setExpandida}>
         <CardHeader className="p-0">
           <div className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors">
@@ -106,8 +90,9 @@ function ZonaItem({ zona, vistaGeneral, seleccionada, onToggle }: {
             <CollapsibleTrigger asChild>
               <div className="flex-1 flex items-center gap-4 cursor-pointer">
                 {/* Icono */}
-                <div className={`p-2 rounded-lg ${zona.clasificacionDistancia.color.replace('text-', 'bg-').replace('-700', '-100')}`}>
-                  {getIconoDistancia()}
+
+                <div className="p-2 rounded-lg bg-slate-100">
+                  <Building2 className="h-5 w-5 text-slate-600" />
                 </div>
 
                 {/* Info principal */}
@@ -115,12 +100,6 @@ function ZonaItem({ zona, vistaGeneral, seleccionada, onToggle }: {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-slate-900">{zona.ciudad}</h3>
                     <span className="text-sm text-slate-500">{zona.provincia}</span>
-                    {zona.casosUrgentes > 0 && (
-                      <Badge className="bg-amber-100 text-amber-700 text-xs">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        {zona.casosUrgentes} urgente{zona.casosUrgentes > 1 ? 's' : ''}
-                      </Badge>
-                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                     <span className="flex items-center gap-1">
@@ -131,17 +110,8 @@ function ZonaItem({ zona, vistaGeneral, seleccionada, onToggle }: {
                       <Scale className="h-3 w-3" />
                       {zona.juzgados.length} juzgado{zona.juzgados.length > 1 ? 's' : ''}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Navigation className="h-3 w-3" />
-                      {zona.distanciaKm} km
-                    </span>
                   </div>
                 </div>
-
-                {/* Badge de distancia */}
-                <Badge variant="outline" className={`${zona.clasificacionDistancia.color} text-xs`}>
-                  {zona.clasificacionDistancia.label}
-                </Badge>
 
                 {/* Indicador expandir */}
                 <div className="text-slate-400">
@@ -258,8 +228,7 @@ function ProvinciaGroup({ provincia, zonas, vistaGeneral, zonasSeleccionadas, on
   onToggle: (id: string) => void
 }) {
   const [expandida, setExpandida] = useState(true)
-  const totalCasos = zonas.reduce((sum, z) => sum + z.totalCasos, 0)
-  const totalUrgentes = zonas.reduce((sum, z) => sum + z.casosUrgentes, 0)
+const totalCasos = zonas.reduce((sum, z) => sum + z.totalCasos, 0)
 
   return (
     <div className="space-y-2">
@@ -273,12 +242,6 @@ function ProvinciaGroup({ provincia, zonas, vistaGeneral, zonasSeleccionadas, on
         <span className="text-xs text-slate-500">
           {zonas.length} ciudad{zonas.length > 1 ? 'es' : ''} · {totalCasos} caso{totalCasos > 1 ? 's' : ''}
         </span>
-        {totalUrgentes > 0 && (
-          <Badge className="bg-amber-100 text-amber-700 text-xs ml-1">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            {totalUrgentes} urgente{totalUrgentes > 1 ? 's' : ''}
-          </Badge>
-        )}
         <div className="ml-auto text-slate-400">
           {expandida ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>

@@ -40,7 +40,7 @@ useEffect(() => {
   setCargandoPdf(true)
   setPdfError(null)
 
-  fetch(documento.url, { credentials: 'include' })
+  fetch(documento.url)
     .then(async (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()

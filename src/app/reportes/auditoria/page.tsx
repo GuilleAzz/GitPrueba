@@ -50,6 +50,13 @@ export type EventoAuditoria = {
     descripcion: string | null
     eliminadoEn: string | null
   } | null
+    plantillaOca: {
+    id: string
+    tipoPlantilla: string
+    archivoNombre: string
+    archivoUrl: string
+    eliminadoEn: string | null
+  } | null
 }
 
 export type EventosPorDia = {
@@ -60,7 +67,7 @@ export type EventosPorDia = {
 
 // ════════ ACCIONES DE CASOS ════════
 const ACCIONES_CASO = [
-  "CREATE", "ESTADO_CHANGE", "PRIORIDAD_CHANGE",
+  "CREATE", "ESTADO_CHANGE", "ESTADO_RETROCESO","PRIORIDAD_CHANGE",
   "JUZGADO_CHANGE", "UBICACION_CHANGE", "MONTO_CHANGE",
   "CIERRE", "REAPERTURA", "UPDATE",
 ]
@@ -98,15 +105,20 @@ const ACCIONES_LIQUIDACION = [
   "LIQUIDACION_ELIMINADA",
 ]
 
+const ACCIONES_OCA = [
+  "OCA_CREADA",
+  "OCA_ELIMINADA",
+]
+
 const ACCIONES_RELEVANTES = [
   ...ACCIONES_CASO,
   ...ACCIONES_TAREA,
   ...ACCIONES_DOCUMENTO,
   ...ACCIONES_LIQUIDACION,
+  ...ACCIONES_OCA,
 ]
 
-const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA"]
-
+const ACCIONES_CRITICAS = ["MONTO_CHANGE", "JUZGADO_CHANGE", "UBICACION_CHANGE", "CIERRE", "REAPERTURA", "ESTADO_RETROCESO"]
 // Helpers exportados para los componentes
 export function esAccionDeTarea(accion: string): boolean {
   return ACCIONES_TAREA.includes(accion)
@@ -116,6 +128,9 @@ export function esAccionDeDocumento(accion: string): boolean {
 }
 export function esAccionDeLiquidacion(accion: string): boolean {
   return ACCIONES_LIQUIDACION.includes(accion)
+}
+export function esAccionDeOca(accion: string): boolean {
+  return ACCIONES_OCA.includes(accion)
 }
 
 // ============================================================================
@@ -156,6 +171,14 @@ function mapearEvento(e: any): EventoAuditoria {
       descripcion: e.liquidacion.descripcion,
       eliminadoEn: e.liquidacion.eliminadoEn?.toISOString() ?? null,
     } : null,
+    // NUEVO: mapeo de plantilla OCA
+    plantillaOca: e.plantillaOca ? {
+      id: e.plantillaOca.id,
+      tipoPlantilla: e.plantillaOca.tipoPlantilla,
+      archivoNombre: e.plantillaOca.archivoNombre,
+      archivoUrl: e.plantillaOca.archivoUrl,
+      eliminadoEn: e.plantillaOca.eliminadoEn?.toISOString() ?? null,
+    } : null,
   }
 }
 
@@ -181,11 +204,12 @@ async function getEventosAuditoria(
   const hasta = new Date(fechaHasta + "T23:59:59")
 
   // Resolver filtro de acción según selección
-  const accionWhere =
+const accionWhere =
     filtroAccion === "criticos"   ? { in: ACCIONES_CRITICAS } :
     filtroAccion === "eventos"    ? { in: ACCIONES_TAREA } :
     filtroAccion === "documentos" ? { in: ACCIONES_DOCUMENTO } :
     filtroAccion === "calculos"   ? { in: ACCIONES_LIQUIDACION } :
+    filtroAccion === "ocas"       ? { in: ACCIONES_OCA } :
     filtroAccion !== "todos"      ? filtroAccion :
                                     { in: ACCIONES_RELEVANTES }
 
@@ -202,6 +226,7 @@ async function getEventosAuditoria(
     tarea:       { select: { id: true, titulo: true, tipo: true, categoria: true } },
     documento:   { select: { id: true, nombre: true, tipo: true, extension: true } },
     liquidacion: { select: { id: true, tipo: true, montoTotal: true, descripcion: true, eliminadoEn: true } },
+    plantillaOca:{ select: { id: true, tipoPlantilla: true, archivoNombre: true, archivoUrl: true, eliminadoEn: true } },
   }
 
   // Traemos TODOS los eventos del período (sin paginar todavía)
@@ -264,6 +289,7 @@ async function getEventosCasoAgrupados(
       tarea:       { select: { id: true, titulo: true, tipo: true, categoria: true } },
       documento:   { select: { id: true, nombre: true, tipo: true, extension: true } },
       liquidacion: { select: { id: true, tipo: true, montoTotal: true, descripcion: true, eliminadoEn: true } },
+      plantillaOca:{ select: { id: true, tipoPlantilla: true, archivoNombre: true, archivoUrl: true, eliminadoEn: true } },
     }
   })
 
@@ -306,6 +332,7 @@ async function getEventosPorCaso(
       tarea:       { select: { id: true, titulo: true, tipo: true, categoria: true } },
       documento:   { select: { id: true, nombre: true, tipo: true, extension: true } },
       liquidacion: { select: { id: true, tipo: true, montoTotal: true, descripcion: true, eliminadoEn: true } },
+      plantillaOca:{ select: { id: true, tipoPlantilla: true, archivoNombre: true, archivoUrl: true, eliminadoEn: true } },
     }
   })
   const filtrados = filtrarHitosTarea(eventosDb)
@@ -319,11 +346,12 @@ async function getFechasConActividad(
   const casoIds = casosDelAbogado.map((c: any) => c.id)
   if (casoIds.length === 0) return []
 
-  const accionWhere =
+const accionWhere =
     filtroAccion === "criticos"   ? { in: ACCIONES_CRITICAS } :
     filtroAccion === "eventos"    ? { in: ACCIONES_TAREA } :
     filtroAccion === "documentos" ? { in: ACCIONES_DOCUMENTO } :
     filtroAccion === "calculos"   ? { in: ACCIONES_LIQUIDACION } :
+    filtroAccion === "ocas"       ? { in: ACCIONES_OCA } :
     filtroAccion !== "todos"      ? filtroAccion :
                                     { in: ACCIONES_RELEVANTES }
 

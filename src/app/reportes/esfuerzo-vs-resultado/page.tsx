@@ -1,18 +1,21 @@
-// app/reportes/esfuerzo-vs-resultado/page.tsx
-// ES-012: Esfuerzo vs Resultado por Cliente
+// app/reportes/actividad-cliente/page.tsx
+// Reporte: Actividad por Cliente
 // Visibilidad: solo ABOGADO (vista personal de su cartera)
+//
+// Ex "Esfuerzo vs Resultado". Rediseñado para responder únicamente:
+// ¿Qué clientes concentran mi actividad operativa?
 
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { Sidebar } from "@/app/components/sidebar"
 import { Header } from "@/app/components/header"
 import { getUserSessionServer } from "@/auth/actions/auth-actions"
-import { ArrowLeft, LineChart } from "lucide-react"
+import { ArrowLeft, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-import { ReporteEsfuerzoView } from "./components/ReporteEsfuerzoView"
+import { ReporteActividadClienteView } from "./components/ReporteActividadClienteView"
 
-export default async function ReporteEsfuerzoVsResultadoPage() {
+export default async function ReporteActividadClientePage() {
   const user = await getUserSessionServer()
   if (!user) redirect("/api/auth/signin")
 
@@ -41,18 +44,19 @@ export default async function ReporteEsfuerzoVsResultadoPage() {
                 </Link>
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                    <LineChart className="h-6 w-6 text-blue-600" />
-                    Esfuerzo vs Resultado por Cliente
+                    <Activity className="h-6 w-6 text-blue-600" />
+                    Actividad por Cliente
                   </h1>
                   <p className="text-sm text-slate-500">
-                    Análisis de rentabilidad de tu cartera: trabajo operativo invertido frente al resultado económico obtenido.
+                    Distribución del trabajo operativo entre los clientes de tu cartera.
+                    Muestra qué clientes concentran más acciones registradas en el sistema.
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Contenido interactivo (client component) */}
-            <ReporteEsfuerzoView />
+            <ReporteActividadClienteView />
 
           </div>
         </main>
