@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
-  Bell, Clock, CheckCheck, ArrowRight, FileText, MessageCircle, AlarmClock, Pencil,
+  Bell, Clock, CheckCheck, ArrowRight, FileText, MessageCircle, AlarmClock, Pencil, AlertTriangle,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -101,6 +101,10 @@ export function Header() {
   // ⬇ NUEVO: discriminar nuevas vs editadas para el resumen del sheet
   const cantidadEventosNuevos = tareasNuevas.filter(t => t.tipoNovedad === "nueva").length
   const cantidadEventosEditados = tareasNuevas.filter(t => t.tipoNovedad === "editada").length
+
+  // Separar alertas ya vencidas de las que todavía están por vencer
+  const alertasVencidas = alertasProximas.filter(a => a.diasRestantes < 0)
+  const alertasPorVencer = alertasProximas.filter(a => a.diasRestantes >= 0)
 
   const cargarNotificaciones = useCallback(() => {
     startTransition(async () => {
@@ -252,7 +256,17 @@ export function Header() {
                   )}
                   {burbujasComentarios.length > 0 && alertasProximas.length > 0 && <span> · </span>}
                   {alertasProximas.length > 0 && (
-                    <span>{alertasProximas.length} por vencer</span>
+                    <span>
+                      {alertasVencidas.length > 0 && (
+                        <span className="text-red-600 font-semibold">
+                          {alertasVencidas.length} vencido{alertasVencidas.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {alertasVencidas.length > 0 && alertasPorVencer.length > 0 && " · "}
+                      {alertasPorVencer.length > 0 && (
+                        <>{alertasPorVencer.length} por vencer</>
+                      )}
+                    </span>
                   )}
                 </p>
               )}
@@ -391,6 +405,7 @@ export function Header() {
 
                     const a = item.data
                     const prioCfgA = PRIORIDAD_CONFIG[a.prioridad] ?? PRIORIDAD_CONFIG.MEDIA
+                    const estaVencida = a.diasRestantes < 0
                     const esUrgente = a.umbral === 5 || a.diasRestantes <= 2
                     return (
                       <button
@@ -401,30 +416,36 @@ export function Header() {
                         <div className="px-5 py-3.5 hover:bg-slate-50 transition-colors group">
                           <div className="flex items-start gap-3">
                             <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
-                              esUrgente
-                                ? "bg-amber-100 border-amber-300"
-                                : "bg-yellow-50 border-yellow-200"
+                              estaVencida
+                                ? "bg-red-100 border-red-300"
+                                : esUrgente
+                                  ? "bg-amber-100 border-amber-300"
+                                  : "bg-yellow-50 border-yellow-200"
                             }`}>
-                              <AlarmClock className={`w-4 h-4 ${esUrgente ? "text-amber-700" : "text-yellow-700"}`} />
+                              {estaVencida ? (
+                                <AlertTriangle className="w-4 h-4 text-red-700" />
+                              ) : (
+                                <AlarmClock className={`w-4 h-4 ${esUrgente ? "text-amber-700" : "text-yellow-700"}`} />
+                              )}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 <span className={`text-[10px] font-bold uppercase tracking-wide ${
-                                  esUrgente ? "text-amber-700" : "text-yellow-700"
+                                  estaVencida ? "text-red-700" : esUrgente ? "text-amber-700" : "text-yellow-700"
                                 }`}>
-                                  Por vencer
+                                  {estaVencida ? "Evento vencido" : "Por vencer"}
                                 </span>
-                                {a.umbral === 5 && (
+                                {!estaVencida && a.umbral === 5 && (
                                   <span className="text-[9px] px-1.5 py-0 rounded-full bg-amber-200 text-amber-800 font-bold">
                                     5d
                                   </span>
                                 )}
-                                {a.umbral === 10 && (
+                                {!estaVencida && a.umbral === 10 && (
                                   <span className="text-[9px] px-1.5 py-0 rounded-full bg-yellow-200 text-yellow-800 font-bold">
                                     10d
                                   </span>
                                 )}
-                                {a.umbral === 20 && (
+                                {!estaVencida && a.umbral === 20 && (
                                   <span className="text-[9px] px-1.5 py-0 rounded-full bg-yellow-100 text-yellow-700 font-medium">
                                     20d
                                   </span>
