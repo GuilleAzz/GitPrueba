@@ -468,12 +468,12 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
                 <nav className="mb-3 flex items-center gap-1.5 text-sm text-slate-400">
                   <Link href="/reportes" className="hover:text-slate-700 transition-colors">Reportes</Link>
                   <ChevronRight className="w-3.5 h-3.5" />
-                  <span className="text-slate-600 font-medium">Auditoría Personal</span>
+                  <span className="text-slate-600 font-medium">Log de Movimientos</span>
                 </nav>
                 <div className="flex items-center justify-between">
                   <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                     <ShieldCheck className="h-6 w-6 text-slate-700" />
-                    Auditoría Personal
+                    Log de Movimientos
                   </h1>
                   <span className="text-xs font-medium px-3 py-1.5 rounded-full border bg-slate-100 text-slate-600 border-slate-200">
                     Acceso Privado

@@ -45,7 +45,7 @@ type Reporte = {
 // ─────────────────────────────────────────────────────────────────────────────
 const REPORTES: Reporte[] = [
   {
-    titulo: "Auditoría personal",
+    titulo: "Log de Movimientos",
     descripcion: "Registro de cambios en mis expedientes",
     href: "/reportes/auditoria",
     icono: FileText,
