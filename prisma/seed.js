@@ -38,14 +38,27 @@ async function main() {
   // ============================================================
   // 1. LIMPIEZA
   // ============================================================
-  try {
-    await prisma.bitacora.deleteMany();
-    await prisma.tarea.deleteMany();
-    await prisma.requirement.deleteMany();
-    await prisma.pago.deleteMany();
-  } catch (e) { console.log("✓ Tablas dependientes limpias."); }
+  // Borrado tolerante: para modelos que pueden no existir en el schema.
+  const borrarSiExiste = async (nombre) => {
+    try {
+      if (prisma[nombre]) await prisma[nombre].deleteMany();
+    } catch (e) {
+      console.log(`   ⚠ No se pudo limpiar ${nombre}: ${e.message}`);
+    }
+  };
 
-  try { await prisma.casoColaborador.deleteMany(); } catch (e) {}
+  // Orden de dependencia: hijos primero, padres después.
+  await prisma.bitacora.deleteMany();
+  await prisma.comentarioTarea.deleteMany();
+  await prisma.tareaLectura.deleteMany();
+  await prisma.tarea.deleteMany();
+  await prisma.historialMonto.deleteMany();
+  await borrarSiExiste('plantillaOca');
+  await borrarSiExiste('liquidacion');
+  await borrarSiExiste('requirement');
+  await borrarSiExiste('pago');
+
+  await borrarSiExiste('casoColaborador');
 
   await prisma.caso.deleteMany();
   await prisma.cliente.deleteMany();
@@ -90,10 +103,10 @@ for (const u of usuarios) {
 
   const clientes = [
     // === FRECUENTES (empresas grandes, muchos casos) ===
-    { id: 'c-01', tipoPersona: 'JURIDICA', nombre: "TechCorp S.A.",               apellido: null,        email: "legal@techcorp.com",        telefono: "+54 11 4567-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70001111-1", abogadoId: "u-hernan",  createdAt: diasAtrasDate(730) },
+    { id: 'c-01', tipoPersona: 'JURIDICA', nombre: "TechCorp S.A.",               apellido: null,        email: "legal@techcorp.com",        telefono: "+54 11 4567-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70001111-5", abogadoId: "u-hernan",  createdAt: diasAtrasDate(730) },
     { id: 'c-04', tipoPersona: 'JURIDICA', nombre: "Constructora del Sur S.R.L.", apellido: null,        email: "admin@consur.com",          telefono: "+54 351 444-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70002222-2", abogadoId: "u-hernan",  createdAt: diasAtrasDate(650) },
-    { id: 'c-12', tipoPersona: 'JURIDICA', nombre: "Transporte Rápido S.A.",      apellido: null,        email: "legal@transrapido.com",     telefono: "+54 341 555-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70004444-4", abogadoId: "u-mario",   createdAt: diasAtrasDate(600) },
-    { id: 'c-20', tipoPersona: 'JURIDICA', nombre: "Agro Pampa S.A.",             apellido: null,        email: "legal@agropampa.com",       telefono: "+54 342 666-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70006666-6", abogadoId: "u-laura",   createdAt: diasAtrasDate(550) },
+    { id: 'c-12', tipoPersona: 'JURIDICA', nombre: "Transporte Rápido S.A.",      apellido: null,        email: "legal@transrapido.com",     telefono: "+54 341 555-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70004444-7", abogadoId: "u-mario",   createdAt: diasAtrasDate(600) },
+    { id: 'c-20', tipoPersona: 'JURIDICA', nombre: "Agro Pampa S.A.",             apellido: null,        email: "legal@agropampa.com",       telefono: "+54 342 666-0001", tipoDocumento: "CUIT", numeroDocumento: "30-70006666-1", abogadoId: "u-laura",   createdAt: diasAtrasDate(550) },
 
     // === RECURRENTES (2-4 casos) ===
     { id: 'c-02', tipoPersona: 'FISICA',   nombre: "Carlos",    apellido: "Mendoza",   email: "carlos.mendoza@mail.com",   telefono: "+54 9 351 111-0001", tipoDocumento: "DNI", numeroDocumento: "20111001", abogadoId: "u-hernan",  createdAt: diasAtrasDate(500) },
@@ -101,14 +114,14 @@ for (const u of usuarios) {
     { id: 'c-05', tipoPersona: 'FISICA',   nombre: "Roberto",   apellido: "Díaz",      email: "roberto.diaz@mail.com",     telefono: "+54 9 351 111-0003", tipoDocumento: "DNI", numeroDocumento: "18333003", abogadoId: "u-hernan",  createdAt: diasAtrasDate(400) },
     { id: 'c-06', tipoPersona: 'FISICA',   nombre: "María",     apellido: "García",    email: "maria.garcia@mail.com",     telefono: "+54 9 351 222-0001", tipoDocumento: "DNI", numeroDocumento: "25444004", abogadoId: "u-agustin", createdAt: diasAtrasDate(420) },
     { id: 'c-07', tipoPersona: 'FISICA',   nombre: "Jorge",     apellido: "Martínez",  email: "jorge.martinez@mail.com",   telefono: "+54 9 351 222-0002", tipoDocumento: "DNI", numeroDocumento: "22555005", abogadoId: "u-agustin", createdAt: diasAtrasDate(380) },
-    { id: 'c-08', tipoPersona: 'JURIDICA', nombre: "Importadora Global S.A.",     apellido: null,        email: "legal@impglobal.com",       telefono: "+54 11 4567-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-70003333-3", abogadoId: "u-agustin", createdAt: diasAtrasDate(500) },
+    { id: 'c-08', tipoPersona: 'JURIDICA', nombre: "Importadora Global S.A.",     apellido: null,        email: "legal@impglobal.com",       telefono: "+54 11 4567-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-70003334-8", abogadoId: "u-agustin", createdAt: diasAtrasDate(500) },
     { id: 'c-11', tipoPersona: 'FISICA',   nombre: "Andrés",    apellido: "Gómez",     email: "andres.gomez@mail.com",     telefono: "+54 9 351 333-0001", tipoDocumento: "DNI", numeroDocumento: "23888008", abogadoId: "u-mario",   createdAt: diasAtrasDate(450) },
     { id: 'c-15', tipoPersona: 'FISICA',   nombre: "Carolina",  apellido: "Vega",      email: "carolina.vega@mail.com",    telefono: "+54 9 351 444-0001", tipoDocumento: "DNI", numeroDocumento: "28111011", abogadoId: "u-laura",   createdAt: diasAtrasDate(370) },
-    { id: 'c-16', tipoPersona: 'JURIDICA', nombre: "Inmobiliaria Centro S.A.",    apellido: null,        email: "legal@inmobcentro.com",     telefono: "+54 351 555-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-70005555-5", abogadoId: "u-laura",   createdAt: diasAtrasDate(360) },
+    { id: 'c-16', tipoPersona: 'JURIDICA', nombre: "Inmobiliaria Centro S.A.",    apellido: null,        email: "legal@inmobcentro.com",     telefono: "+54 351 555-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-70005555-4", abogadoId: "u-laura",   createdAt: diasAtrasDate(360) },
     { id: 'c-19', tipoPersona: 'FISICA',   nombre: "Diego",     apellido: "Ruiz",      email: "diego.ruiz@mail.com",       telefono: "+54 9 351 444-0003", tipoDocumento: "DNI", numeroDocumento: "25444014", abogadoId: "u-laura",   createdAt: diasAtrasDate(330) },
-    { id: 'c-22', tipoPersona: 'JURIDICA', nombre: "Metalúrgica Norte S.A.",      apellido: null,        email: "legal@metalnorte.com",      telefono: "+54 351 666-0001",   tipoDocumento: "CUIT", numeroDocumento: "30-70007777-7", abogadoId: "u-hernan",  createdAt: diasAtrasDate(300) },
+    { id: 'c-22', tipoPersona: 'JURIDICA', nombre: "Metalúrgica Norte S.A.",      apellido: null,        email: "legal@metalnorte.com",      telefono: "+54 351 666-0001",   tipoDocumento: "CUIT", numeroDocumento: "30-70007777-9", abogadoId: "u-hernan",  createdAt: diasAtrasDate(300) },
     { id: 'c-25', tipoPersona: 'JURIDICA', nombre: "Farmacia del Pueblo S.R.L.",  apellido: null,        email: "legal@farmpueblo.com",      telefono: "+54 351 666-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-70008888-8", abogadoId: "u-laura",   createdAt: diasAtrasDate(340) },
-    { id: 'c-28', tipoPersona: 'JURIDICA', nombre: "Cereales del Centro S.A.",    apellido: null,        email: "legal@cercentro.com",       telefono: "+54 353 777-0001",   tipoDocumento: "CUIT", numeroDocumento: "30-70009999-9", abogadoId: "u-mario",   createdAt: diasAtrasDate(280) },
+    { id: 'c-28', tipoPersona: 'JURIDICA', nombre: "Cereales del Centro S.A.",    apellido: null,        email: "legal@cercentro.com",       telefono: "+54 353 777-0001",   tipoDocumento: "CUIT", numeroDocumento: "30-70009999-3", abogadoId: "u-mario",   createdAt: diasAtrasDate(280) },
 
     // === ÚNICOS (1 caso) ===
     { id: 'c-09', tipoPersona: 'FISICA',   nombre: "Lucía",     apellido: "Fernández", email: "lucia.fernandez@mail.com",  telefono: "+54 9 351 222-0003", tipoDocumento: "DNI", numeroDocumento: "29666006", abogadoId: "u-agustin", createdAt: diasAtrasDate(200) },
@@ -125,17 +138,17 @@ for (const u of usuarios) {
 
     // === INACTIVOS (solo casos cerrados) ===
     { id: 'c-31', tipoPersona: 'FISICA',   nombre: "Osvaldo",   apellido: "Figueroa",  email: "osvaldo.figueroa@mail.com", telefono: "+54 9 351 888-0001", tipoDocumento: "DNI", numeroDocumento: "19222030", abogadoId: "u-hernan",  createdAt: diasAtrasDate(700) },
-    { id: 'c-32', tipoPersona: 'JURIDICA', nombre: "Distribuidora Litoral S.R.L.", apellido: null, email: "legal@distlitoral.com", telefono: "+54 342 999-0001", tipoDocumento: "CUIT", numeroDocumento: "30-71001111-1", abogadoId: "u-laura",   createdAt: diasAtrasDate(600) },
+    { id: 'c-32', tipoPersona: 'JURIDICA', nombre: "Distribuidora Litoral S.R.L.", apellido: null, email: "legal@distlitoral.com", telefono: "+54 342 999-0001", tipoDocumento: "CUIT", numeroDocumento: "30-71001111-3", abogadoId: "u-laura",   createdAt: diasAtrasDate(600) },
     { id: 'c-33', tipoPersona: 'FISICA',   nombre: "Graciela",  apellido: "Molina",    email: "graciela.molina@mail.com",  telefono: "+54 9 351 888-0002", tipoDocumento: "DNI", numeroDocumento: "24333031", abogadoId: "u-agustin", createdAt: diasAtrasDate(550) },
     { id: 'c-34', tipoPersona: 'FISICA',   nombre: "Hugo",      apellido: "Cabrera",   email: "hugo.cabrera@mail.com",     telefono: "+54 9 261 888-0001", tipoDocumento: "DNI", numeroDocumento: "21444032", abogadoId: "u-mario",   createdAt: diasAtrasDate(500) },
     { id: 'c-35', tipoPersona: 'JURIDICA', nombre: "Estudio Contable Ríos",       apellido: null, email: "info@ecrios.com",           telefono: "+54 351 888-0003",   tipoDocumento: "CUIT", numeroDocumento: "30-71002222-2", abogadoId: "u-hernan",  createdAt: diasAtrasDate(450) },
     { id: 'c-36', tipoPersona: 'FISICA',   nombre: "Norma",     apellido: "Peralta",   email: "norma.peralta@mail.com",    telefono: "+54 9 351 888-0004", tipoDocumento: "DNI", numeroDocumento: "26555033", abogadoId: "u-laura",   createdAt: diasAtrasDate(400) },
     { id: 'c-37', tipoPersona: 'FISICA',   nombre: "Alberto",   apellido: "Sosa",      email: "alberto.sosa@mail.com",     telefono: "+54 9 351 888-0005", tipoDocumento: "DNI", numeroDocumento: "18666034", abogadoId: "u-agustin", createdAt: diasAtrasDate(380) },
-    { id: 'c-38', tipoPersona: 'JURIDICA', nombre: "Panadería La Estrella S.R.L.", apellido: null, email: "info@panalestrella.com",    telefono: "+54 351 888-0006",   tipoDocumento: "CUIT", numeroDocumento: "30-71003333-3", abogadoId: "u-mario",   createdAt: diasAtrasDate(350) },
+    { id: 'c-38', tipoPersona: 'JURIDICA', nombre: "Panadería La Estrella S.R.L.", apellido: null, email: "info@panalestrella.com",    telefono: "+54 351 888-0006",   tipoDocumento: "CUIT", numeroDocumento: "30-71003333-8", abogadoId: "u-mario",   createdAt: diasAtrasDate(350) },
 
     // === SIN CASOS (recién cargados) ===
     { id: 'c-39', tipoPersona: 'FISICA',   nombre: "Romina",    apellido: "Ledesma",   email: "romina.ledesma@mail.com",   telefono: "+54 9 351 999-0001", tipoDocumento: "DNI", numeroDocumento: "31777035", abogadoId: "u-laura",   createdAt: diasAtrasDate(7) },
-    { id: 'c-40', tipoPersona: 'JURIDICA', nombre: "Software del Interior S.A.",  apellido: null, email: "legal@softint.com",         telefono: "+54 351 999-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-71004444-4", abogadoId: "u-hernan",  createdAt: diasAtrasDate(3) },
+    { id: 'c-40', tipoPersona: 'JURIDICA', nombre: "Software del Interior S.A.",  apellido: null, email: "legal@softint.com",         telefono: "+54 351 999-0002",   tipoDocumento: "CUIT", numeroDocumento: "30-71004444-5", abogadoId: "u-hernan",  createdAt: diasAtrasDate(3) },
   ];
 
   for (const c of clientes) {
@@ -298,7 +311,49 @@ for (const u of usuarios) {
   // ============================================================
   let totalBitacoras = 0;
 
+  let totalHistorial = 0;
+
+  // Casos activos y de larga duración que reciben una actualización de monto.
+  // Uno por abogado, para que el historial no quede concentrado en uno solo.
+  const ACTUALIZAN_MONTO = [
+    'EXP-2023-090',  // Vega c/ Estado s/ Expropiación — Laura, 45M, 600 días
+    'EXP-2024-210',  // Romero s/ Usucapión — Mario, 25M, 400 días
+    'EXP-2024-052',  // Mendoza s/ Sucesión — Hernán, 20M, 400 días
+  ];
+
   const diasAtrasMs = (dias) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+
+  // ============================================================
+  // 5.5. COHERENCIA DE NÚMEROS Y MONTOS
+  // ============================================================
+
+  // Expedientes sin contenido patrimonial: no llevan monto en disputa.
+  // (penal sin reclamo civil, tenencia/visitas, amparos, habilitaciones,
+  //  cautelares y mediaciones internas)
+  const SIN_MONTO = [
+    'EXP-2025-302', 'EXP-2025-200', 'EXP-2025-400', 'EXP-2025-402',
+    'EXP-2025-405', 'EXP-2023-080', 'EXP-2024-026', 'EXP-2024-106',
+    'EXP-2025-202', 'EXP-2025-403',
+  ];
+  for (const def of casosDef) {
+    if (SIN_MONTO.includes(def.numero)) {
+      def.montoDisputa = null;
+      def.montoFinal = null;
+    }
+  }
+
+  // Renumeración: el año del expediente tiene que coincidir con su fechaInicio.
+  // Se ordena del más viejo al más nuevo y se asigna correlativo por año.
+  casosDef.sort((a, b) => b.inicioHace - a.inicioHace);
+  const correlativoPorAnio = {};
+  for (const def of casosDef) {
+    const anio = diasAtrasMs(def.inicioHace).getFullYear();
+    correlativoPorAnio[anio] = (correlativoPorAnio[anio] || 0) + 1;
+    def.numeroOriginal = def.numero;
+    def.numero = `EXP-${anio}-${String(correlativoPorAnio[anio]).padStart(3, '0')}`;
+  }
+  console.log(`🔢 Expedientes renumerados por año real de inicio:`,
+    Object.entries(correlativoPorAnio).map(([a, c]) => `${a}: ${c}`).join(' | '));
 
   for (const def of casosDef) {
     const fechaInicio = diasAtrasMs(def.inicioHace);
@@ -356,6 +411,49 @@ for (const u of usuarios) {
       }
     });
 
+    // ── HistorialMonto: fila inicial (solo casos con monto real) ──
+    if (def.montoDisputa && def.montoDisputa > 0) {
+      await prisma.historialMonto.create({
+        data: {
+          casoId:          caso.id,
+          monto:           def.montoDisputa,
+          motivo:          'Monto declarado al abrir el expediente',
+          esInicial:       true,
+          registradoPorId: def.abogadoId,
+          fechaCambio:     fechaInicio,
+          createdAt:       fechaInicio,
+        }
+      });
+      totalHistorial++;
+
+      // ── Actualización simulada en los casos largos ──
+      if (ACTUALIZAN_MONTO.includes(def.numeroOriginal)) {
+        const fechaActualizacion = new Date(fechaInicio.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const montoActualizado = Math.round(def.montoDisputa * 1.3);
+
+        await prisma.historialMonto.create({
+          data: {
+            casoId:          caso.id,
+            monto:           montoActualizado,
+            motivo:          'Actualización monetaria por depreciación',
+            esInicial:       false,
+            registradoPorId: def.abogadoId,
+            fechaCambio:     fechaActualizacion,
+            createdAt:       fechaActualizacion,
+          }
+        });
+
+        // El caso guarda el último valor como cache. updatedAt se pasa explícito
+        // para no pisar la fecha calculada arriba (si no, estos tres casos
+        // dejarían de figurar como estancados en los reportes).
+        await prisma.caso.update({
+          where: { id: caso.id },
+          data:  { montoDisputa: montoActualizado, updatedAt },
+        });
+        totalHistorial++;
+      }
+    }
+
     // Bitácora: CREATE
     await prisma.bitacora.create({
       data: {
@@ -403,6 +501,7 @@ for (const u of usuarios) {
 
   console.log(`📂 ${casosDef.length} Casos creados.`);
   console.log(`📝 ${totalBitacoras} Entradas de bitácora creadas.`);
+  console.log(`💰 ${totalHistorial} Filas de historial de monto creadas.`);
 
 
   // ============================================================
@@ -411,10 +510,26 @@ for (const u of usuarios) {
 console.log("📅 Generando tareas v4 (dispersión temporal, bitácoras unificadas)...");
  
   const casosDB = await prisma.caso.findMany();
-  const getCasoAzar = (abogadoId) => {
-    const filtrados = casosDB.filter(c => c.abogadoId === abogadoId);
+  // Elige un caso coherente con la fecha de la tarea:
+  //  - el expediente ya tiene que existir a esa fecha
+  //  - si está cerrado, la tarea no puede ser posterior al cierre
+  //  - las tareas todavía abiertas solo cuelgan de expedientes abiertos
+  const getCasoAzar = (abogadoId, fechaTarea = null, soloAbiertos = false) => {
+    let filtrados = casosDB.filter(c => c.abogadoId === abogadoId);
+    if (soloAbiertos) filtrados = filtrados.filter(c => !c.estaCerrado);
+    if (fechaTarea) {
+      filtrados = filtrados.filter(c =>
+        c.fechaInicio <= fechaTarea &&
+        (!c.estaCerrado || !c.fechaCierre || c.fechaCierre >= fechaTarea)
+      );
+    }
+    if (filtrados.length === 0) {
+      filtrados = casosDB.filter(c =>
+        c.abogadoId === abogadoId && (!fechaTarea || c.fechaInicio <= fechaTarea)
+      );
+    }
     return filtrados.length > 0 ? filtrados[Math.floor(Math.random() * filtrados.length)] : null;
-  };
+  };  
  
   const tareasGeneradas = [];
   let comentariosGenerados = 0;
@@ -746,10 +861,13 @@ const pickArr = (arr) => arr[randomInt(0, arr.length - 1)];
     // Asistente trabaja sobre casos de Hernán (su jefe)
     const esAsistente = p.responsableId === ASISTENTE;
     const casoTarget = esAsistente ? 'u-hernan' : p.responsableId;
-    const caso = getCasoAzar(casoTarget);
+    let caso = null; // se elige más abajo, cuando ya tenemos las fechas
  
     // Generar fechas según perfil
     const tiempo = generarPerfilTemporal(p.diasInicio, p.perfilEstado);
+    const requiereCasoAbierto = ['PENDIENTE', 'EN_PROCESO', 'BLOQUEADA', 'VENCIDA_RECIENTE']
+      .includes(p.perfilEstado);
+    caso = getCasoAzar(casoTarget, tiempo.fechaInicio, requiereCasoAbierto);
  
     // Estado final según perfil
     let estado;
@@ -983,6 +1101,21 @@ const pickArr = (arr) => arr[randomInt(0, arr.length - 1)];
       }
     }
   }
+
+  // Las bitácoras de tareas también tienen que apuntar al expediente.
+  // Sin esto quedan invisibles para cualquier reporte que entre por caso
+  // (Actividad por Cliente filtra con casoId: { in: [...] }).
+  let bitacorasVinculadas = 0;
+  for (const t of tareasGeneradas) {
+    if (t.casoId) {
+      const r = await prisma.bitacora.updateMany({
+        where: { tareaId: t.id },
+        data:  { casoId: t.casoId },
+      });
+      bitacorasVinculadas += r.count;
+    }
+  }
+  console.log(`🔗 ${bitacorasVinculadas} bitácoras de tarea vinculadas a su expediente.`);
  
   console.log(`📌 ${tareasGeneradas.length} Tareas generadas con dispersión temporal real.`);
   console.log(`📝 Bitácoras unificadas: TAREA_CREADA, TAREA_ESTADO_CHANGE, TAREA_COMPLETADA_CON_DEMORA, TAREA_VENCIDA_CERRADA_MANUAL, TAREA_EDITADA`);

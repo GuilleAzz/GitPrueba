@@ -178,7 +178,7 @@ export async function getReporteActividadClienteAction(params: {
         prisma.bitacora.count({
           where: {
             ...bitacoraWhereBase,
-            accion: "TAREA_ESTADO_CHANGE",
+            accion: { in: ["TAREA_ESTADO_CHANGE", "TAREA_COMPLETADA_CON_DEMORA"] },
             estadoNuevo: "COMPLETADA",
           },
         }),
