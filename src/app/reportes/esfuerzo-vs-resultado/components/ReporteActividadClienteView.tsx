@@ -224,7 +224,7 @@ export function ReporteActividadClienteView() {
                 <CardTitle className="text-lg font-bold text-slate-800">Top 10 clientes que más te consumen</CardTitle>
                 <CardDescription>
                   Ranking por cantidad de acciones registradas en el período. Cada barra muestra el desglose por tipo:
-                  tareas, documentos, plantillas OCA y cálculos.
+                  tareas, documentos, plantillas Correo Argentino y cálculos.
                 </CardDescription>
               </div>
             </div>
@@ -235,7 +235,7 @@ export function ReporteActividadClienteView() {
             <div className="flex items-center gap-4 flex-wrap mb-6 text-xs">
               <LeyendaChip color={COLORES.tareas.bg} icon={<ClipboardCheck className="w-3 h-3" />} label="Tareas completadas" />
               <LeyendaChip color={COLORES.documentos.bg} icon={<FileText className="w-3 h-3" />} label="Documentos" />
-              <LeyendaChip color={COLORES.ocas.bg} icon={<Mail className="w-3 h-3" />} label="Plantillas OCA" />
+              <LeyendaChip color={COLORES.ocas.bg} icon={<Mail className="w-3 h-3" />} label="Plantillas Correo Argentino" />
               <LeyendaChip color={COLORES.calculos.bg} icon={<Calculator className="w-3 h-3" />} label="Cálculos" />
             </div>
 
@@ -332,7 +332,7 @@ export function ReporteActividadClienteView() {
             <ul className="ml-4 space-y-0.5 list-disc">
               <li><strong>Tareas completadas</strong> — eventos de la agenda marcados como completados</li>
               <li><strong>Documentos</strong> — archivos subidos al expediente</li>
-              <li><strong>Plantillas OCA</strong> — telegramas del Correo Argentino generados</li>
+              <li><strong>Plantillas Correo Argentino</strong> — telegramas del Correo Argentino generados</li>
               <li><strong>Cálculos</strong> — liquidaciones de indemnización guardadas</li>
             </ul>
             <p>

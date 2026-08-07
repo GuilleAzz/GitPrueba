@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ArrowLeft, Save, User, Building2, FileText, Phone, Mail, MapPin, Hash, AlertCircle, CheckCircle2, Briefcase, IdCard, Scale, ChevronRight } from 'lucide-react'
 import Link from "next/link"
 import { useFormState, useFormStatus } from "react-dom"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { validarDocumento, getPlaceholderDocumento, getHintDocumento, type TipoDocumento } from "src/lib/utils/documento"
 
 function SubmitButton({ deshabilitado, motivoDeshabilitado }: { deshabilitado?: boolean; motivoDeshabilitado?: string }) {
@@ -110,6 +110,28 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
     }))
   }, [numeroDocumento, documentoTipo])
 
+  // El tipo de documento tiene que seguir al tipo de persona.
+  // Sin esto, al elegir Jurídica la UI muestra "CUIT" pero el estado
+  // sigue en DNI: el campo enmascara a 8 dígitos y valida como DNI.
+  useEffect(() => {
+    if (tipoPersona === 'JURIDICA') {
+      setDocumentoTipo('CUIT')
+    } else if (documentoTipo === 'CUIT') {
+      setDocumentoTipo('DNI')
+    }
+    setNumeroDocumento("")
+  }, [tipoPersona])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Llevar la vista al banner de error cuando el server devuelve uno.
+  // Sin esto el mensaje aparece arriba de todo y el usuario, que está
+  // al pie del formulario, no se entera de que falló.
+  const errorRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (state?.error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [state])
+
    const formPuedeEnviarse = 
     validaciones.email.valido && email.length > 0 &&
     validaciones.telefono.valido && telefono.length > 0 &&
@@ -164,7 +186,7 @@ export default function NuevoClienteForm({ abogados, userRol }: NuevoClienteForm
           </CardHeader>
           <CardContent>
             {state?.error && (
-              <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded flex items-start gap-3">
+              <div ref={errorRef} className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-semibold">Error al crear cliente</p>

@@ -153,7 +153,7 @@ export default function SeccionPlantillasOca({
       <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <Mail className="w-5 h-5 text-slate-600 shrink-0" />
-          <h3 className="font-bold text-slate-800">Plantillas OCA</h3>
+          <h3 className="font-bold text-slate-800">Plantillas Correo Argentino</h3>
           <span className="text-xs text-slate-500">
             ({plantillas.length} {plantillas.length === 1 ? "plantilla" : "plantillas"})
           </span>
@@ -200,7 +200,7 @@ export default function SeccionPlantillasOca({
         <div className="px-5 py-10 text-center text-slate-400">
           <Mail className="w-10 h-10 mx-auto mb-2 text-slate-300" />
           <p className="text-sm font-medium text-slate-500">
-            No hay plantillas OCA generadas para este expediente.
+            No hay plantillas de Correo Argentino generadas para este expediente.
           </p>
           <p className="text-xs mt-1">
             Las plantillas oficiales del Correo Argentino (telegramas laborales, ARCA)

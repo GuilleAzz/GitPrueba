@@ -480,14 +480,7 @@ export default async function UbicacionGeograficaPage({
             )}
 
             {/* Nota metodológica — solo vista personal */}
-            {!vistaGeneral && (
-              <div className="mt-8 p-4 bg-slate-100 border border-slate-200 rounded-lg">
-                <p className="text-xs text-slate-600">
-                  <strong>Nota:</strong> Los expedientes se agrupan por ciudad y provincia según el fuero cargado.
-                  Este reporte muestra la distribución territorial de la cartera para organizar recorridas y traslados.
-                </p>
-              </div>
-            )}
+        
           </div>
         </main>
       </div>

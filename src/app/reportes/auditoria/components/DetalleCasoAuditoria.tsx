@@ -207,7 +207,7 @@ const ACCIONES_DETALLE = [
   { value: "eventos",    label: "Solo eventos (tareas)",          grupo: "general" },
   { value: "documentos", label: "Solo documentos",                grupo: "general" },
   { value: "calculos",   label: "Solo cálculos",                  grupo: "general" },
-  { value: "ocas",       label: "Solo plantillas OCA",            grupo: "general" },
+  { value: "ocas",       label: "Solo plantillas de Correo Argentino",            grupo: "general" },
 
   { value: "ESTADO_CHANGE",     label: "Cambios de etapa",           grupo: "caso" },
   { value: "ESTADO_RETROCESO",  label: "⚠ Retrocesos procesales",    grupo: "caso" },
@@ -236,8 +236,8 @@ const ACCIONES_DETALLE = [
   { value: "LIQUIDACION_CREADA",    label: "Cálculos guardados",      grupo: "liquidacion" },
   { value: "LIQUIDACION_EDITADA",   label: "Cálculos editados",       grupo: "liquidacion" },
   { value: "LIQUIDACION_ELIMINADA", label: "Cálculos eliminados",     grupo: "liquidacion" },
-  { value: "OCA_CREADA",            label: "Plantillas OCA generadas",  grupo: "oca" },
-  { value: "OCA_ELIMINADA",         label: "Plantillas OCA eliminadas", grupo: "oca" },
+  { value: "OCA_CREADA",            label: "Plantillas Correo Argentino generadas",  grupo: "oca" },
+  { value: "OCA_ELIMINADA",         label: "Plantillas Correo Argentino eliminadas", grupo: "oca" },
 ]
 
 // ============================================================================
@@ -608,7 +608,7 @@ export function DetalleCasoAuditoria({ eventos, casoNumero, casoTitulo, casoId, 
                 {accionesLiquidacion.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
               </SelectGroup>
               <SelectGroup>
-                <SelectLabel className="text-[10px] uppercase tracking-wider text-slate-400">Plantillas OCA</SelectLabel>
+                <SelectLabel className="text-[10px] uppercase tracking-wider text-slate-400">Plantillas Correo Argentino</SelectLabel>
                 {accionesOca.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
               </SelectGroup>
             </SelectContent>

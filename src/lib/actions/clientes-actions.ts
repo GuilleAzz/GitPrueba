@@ -95,6 +95,21 @@ export async function crearClienteAction(
   }
   const numeroDocumentoNormalizado = validacionDoc.valorNormalizado
 
+  // Coherencia entre el prefijo del CUIT/CUIL y el tipo de persona.
+  // 20/23/24/27 → personas físicas | 30/33/34 → personas jurídicas
+  if (tipoDocumentoFinal === "CUIT" || tipoDocumentoFinal === "CUIL") {
+    const prefijo = numeroDocumentoNormalizado.slice(0, 2)
+    const PREFIJOS_FISICA = ['20', '23', '24', '27']
+    const PREFIJOS_JURIDICA = ['30', '33', '34']
+
+    if (tipoPersona === "JURIDICA" && !PREFIJOS_JURIDICA.includes(prefijo)) {
+      return { error: `El CUIT ingresado empieza con ${prefijo}, que corresponde a una persona física. Las sociedades usan 30, 33 o 34.` }
+    }
+    if (tipoPersona === "FISICA" && !PREFIJOS_FISICA.includes(prefijo)) {
+      return { error: `El CUIT/CUIL ingresado empieza con ${prefijo}, que corresponde a una persona jurídica. Las personas físicas usan 20, 23, 24 o 27.` }
+    }
+  }
+
   if (tipoPersona === "FISICA" && (!apellido || apellido.trim().length < 2)) {
     return { error: "El apellido es obligatorio para personas físicas" }
   }
@@ -116,15 +131,60 @@ export async function crearClienteAction(
   }
 
   const existeDocumento = await prisma.cliente.findUnique({
-    where: { numeroDocumento: numeroDocumentoNormalizado }
+    where: { numeroDocumento: numeroDocumentoNormalizado },
+    select: { nombre: true, apellido: true, activo: true, abogadoId: true }
   })
   if (existeDocumento) {
-    return { error: `Ya existe un cliente con el documento ${numeroDocumentoNormalizado}` }
+    const quien = `${existeDocumento.nombre}${existeDocumento.apellido ? " " + existeDocumento.apellido : ""}`
+
+    if (!existeDocumento.activo) {
+      return {
+        error: `El documento ${numeroDocumentoNormalizado} pertenece a "${quien}", que está archivado. Reactivalo desde el listado de clientes en vez de crearlo de nuevo.`
+      }
+    }
+
+    const responsable = await prisma.user.findUnique({
+      where: { id: existeDocumento.abogadoId },
+      select: { nombre: true, apellido: true }
+    })
+    const aCargoDe = responsable
+      ? ` — a cargo de ${responsable.nombre ?? ""} ${responsable.apellido ?? ""}`.trimEnd()
+      : ""
+
+    return {
+      error: `El documento ${numeroDocumentoNormalizado} ya está registrado para el cliente "${quien}"${aCargoDe}.`
+    }
   }
 
   if (!email || email.trim().length === 0) {
     return { error: "El email es obligatorio" }
   }
+  const emailNormalizado = email.trim().toLowerCase()
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!EMAIL_REGEX.test(emailNormalizado)) {
+    return { error: "El email no tiene un formato válido" }
+  }
+
+  const emailEnCliente = await prisma.cliente.findFirst({
+    where: { email: emailNormalizado },
+    select: { nombre: true, apellido: true, activo: true }
+  })
+  if (emailEnCliente) {
+    const quien = `${emailEnCliente.nombre}${emailEnCliente.apellido ? " " + emailEnCliente.apellido : ""}`
+    return {
+      error: `Ese email ya está registrado para el cliente "${quien}"${emailEnCliente.activo ? "" : " (archivado)"}.`
+    }
+  }
+
+  const emailEnUsuario = await prisma.user.findFirst({
+    where: { email: emailNormalizado },
+    select: { id: true }
+  })
+  if (emailEnUsuario) {
+    return { error: "Ese email ya está usado por una cuenta del sistema y no puede asignarse a un cliente." }
+  }
+
   if (!telefono || telefono.trim().length === 0) {
     return { error: "El teléfono es obligatorio" }
   }
@@ -409,6 +469,8 @@ export async function eliminarClienteAction(clienteId: string): Promise<ClienteS
     if (casosActivos > 0) {
       return { error: `No se puede eliminar: el cliente tiene ${casosActivos} caso(s) activo(s)` }
     }
+
+    
 
     await prisma.cliente.update({
       where: { id: clienteId },
